@@ -58,4 +58,5 @@ if __name__ == "__main__":
     parser.add_argument('connections', metavar='connections', type=str, nargs='+', help="connections")
     args = parser.parse_args()
     router = Router(args.asn, args.connections)
+    router = Router(7, {"7833-1.2.3.2-cust", "2374-192.168.0.2-peer" ,"1293-67.32.9.2-prov"})
     router.run()
