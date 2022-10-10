@@ -1,6 +1,6 @@
 #!/usr/bin/env -S python3 -u
 
-import argparse, socket, time, json, select, struct, sys, math, copy
+import argparse, socket, time, json, select, struct, sys, math
 
 class ForwardingTables: 
     def __init__(self):
@@ -13,6 +13,27 @@ class ForwardingTables:
     def printData(self):
         for e in self.entries.values() : 
             print(e)
+
+    def convertToBinary(self, msg):
+        prefix = msg["network"]
+        netmask = msg["netmask"]
+        
+        #converting to eventually check withe netmask(count the ones)
+        #with the number that has the correct amount depending on the netmask
+        #then thats the address that we send things to?
+        bprefix = bin(prefix).replace("0b", "")
+        bnetmask = bin(netmask).replace("0b", "")
+
+        index = self.countOnes(bnetmask)
+        #for index through length, replace that value with 0
+
+    #returns the count of a given netmask in ones to know how much to index by    
+    def countOnes(bnetmask):
+        count = 0
+        for i in bnetmask:
+            if(i == 1):
+                count +=1 
+        return count   
 
 
 #this is another test to check
