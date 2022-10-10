@@ -1,6 +1,6 @@
 #!/usr/bin/env -S python3 -u
 
-import argparse, socket, time, json, select, struct, sys, math
+import argparse, socket, time, json, select, struct, sys, math, copy
 
 class ForwardingTables: 
     def __init__(self):
@@ -26,10 +26,16 @@ class Router:
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
         self.asn = asn
+        # Storing entires 
         self.fowardTable = ForwardingTables()
+        # Storing announcements  
+        self.LoA = []
+        # Storing the list of neighbor
+        self.LoN = []
         for relationship in connections:
             port, neighbor, relation = relationship.split("-")
 
+            self.LoN.append(neighbor)
             self.sockets[neighbor] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sockets[neighbor].bind(('localhost', 0))
             self.ports[neighbor] = int(port)
@@ -45,16 +51,34 @@ class Router:
     def send(self, network, message):
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
 
+    def updateMSG(self, srcif, msg): 
+        self.LoA = msg
+
+        if self.relations[srcif] == 'cust':
+            for n in self.LoN: 
+                if n != srcif:
+                    msgCopy = {
+                        "msg":  { #Copy msg 
+                            "netmask" : msg["msg"]["netmask"],
+                            "ASPath" :  [self.asn , msg["msg"]["ASPath"][0]],
+                            "network" : msg["msg"]["network"]
+                        }, 
+                        "src": n[:-1] + '1',
+                        "dst": n,
+                        "type": msg['type']
+                    }
+                     
+                    self.send(n, json.dumps(msgCopy))   
+        
+
 
     def process_msgReceived(self, msg, srcif): 
         data = json.loads(msg); 
-        self.fowardTable.add_entries(srcif, data) 
-        self.fowardTable.printData()
-        if (data["type"] == 'update'): 
-            
-            pass
 
-        print (data) 
+
+        if (data["type"] == 'update'): 
+            self.updateMSG(srcif, data)
+ 
 
     def run(self):
         while True:
