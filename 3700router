@@ -72,6 +72,7 @@ class Router:
     def send(self, network, message):
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
 
+    # Update MSG and foward announcement 
     def updateMSG(self, srcif, msg): 
         self.LoA = msg
 
@@ -92,7 +93,7 @@ class Router:
                     self.send(n, json.dumps(msgCopy))   
         
 
-
+    # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
         data = json.loads(msg); 
 
