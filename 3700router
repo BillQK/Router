@@ -113,7 +113,12 @@ class Router:
 
         if (data["type"] == 'update'): 
             self.updateMSG(srcif, data)
- 
+        
+        if (data["type"] == 'data'): 
+            self.dataMsg(srcif,data) 
+
+        if (data["type"] == 'dump'):
+            self.dumpMsg(srcif, data);
 
     def run(self):
         while True:
