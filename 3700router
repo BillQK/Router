@@ -1,6 +1,6 @@
 #!/usr/bin/env -S python3 -u
 
-import argparse, socket, time, json, select, struct, sys, math
+import argparse, socket, time, json, select, struct, sys, math, copy
 
 #another test
 class ForwardingTables: 
@@ -104,17 +104,16 @@ class Router:
                         "type": msg['type']
                     }
                      
-                    self.send(n, json.dumps(msgCopy)) 
+                    self.send(n, json.dumps(msgCopy))   
+
+    def dumpMsg(self, srcif, msg): 
+        # generate dump message in correct format
+        # odo: Make aggregation in forwarding table
+        for n in self.LoN: 
+            self.send(n, json.dumps(msg))
 
     def dataMsg(self, srcif, msg):
-        self.fowardTable.add_entries(srcif, msg)
-        src = msg["src"]
-        dst = msg["dst"]
-
-        #quickly test if i am doing this shit right
-        self.send("192.168.0.2", json.dumps(msg["msg"]))
-        print("potentially sent something")
-        
+        pass
 
     # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
