@@ -3,7 +3,6 @@
 import argparse, socket, time, json, select, struct, sys, math
 
 #another test
-
 class ForwardingTables: 
     def __init__(self):
         self.entries = {}
@@ -105,7 +104,16 @@ class Router:
                         "type": msg['type']
                     }
                      
-                    self.send(n, json.dumps(msgCopy))   
+                    self.send(n, json.dumps(msgCopy)) 
+
+    def dataMsg(self, srcif, msg):
+        self.fowardTable.add_entries(srcif, msg)
+        src = msg["src"]
+        dst = msg["dst"]
+
+        #quickly test if i am doing this shit right
+        self.send("192.168.0.2", json.dumps(msg["msg"]))
+        print("potentially sent something")
         
 
     # Processing the msg and delegate to delegation method
@@ -118,8 +126,8 @@ class Router:
         if (data["type"] == 'data'): 
             self.dataMsg(srcif,data) 
 
-        if (data["type"] == 'dump'):
-            self.dumpMsg(srcif, data);
+        #if (data["type"] == 'dump'):
+        #    self.dumpMsg(srcif, data)
 
     def run(self):
         while True:
