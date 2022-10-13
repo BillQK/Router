@@ -2,6 +2,8 @@
 
 import argparse, socket, time, json, select, struct, sys, math, copy
 
+#another test
+
 class ForwardingTables: 
     def __init__(self):
         self.entries = {}
@@ -85,22 +87,6 @@ class Router:
     def send(self, network, message):
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
 
-    def run(self):
-        while True:
-            socks = select.select(self.sockets.values(), [], [], 0.1)[0]
-            for conn in socks:
-                k, addr = conn.recvfrom(65535)             
-                srcif = None
-                for sock in self.sockets:
-                    if self.sockets[sock] == conn:
-                        srcif = sock
-                        break
-                msg = k.decode('utf-8')
-                self.process_msgReceived(msg, srcif)
-                print("Received message '%s' from %s" % (msg, srcif))
-            
-        return
-
     # Update MSG and foward announcement 
     def updateMSG(self, srcif, msg): 
         self.LoA = msg
@@ -142,6 +128,22 @@ class Router:
 
         if (data["type"] == 'dump'):
             self.dumpMsg(srcif, data);
+
+    def run(self):
+        while True:
+            socks = select.select(self.sockets.values(), [], [], 0.1)[0]
+            for conn in socks:
+                k, addr = conn.recvfrom(65535)             
+                srcif = None
+                for sock in self.sockets:
+                    if self.sockets[sock] == conn:
+                        srcif = sock
+                        break
+                msg = k.decode('utf-8')
+                self.process_msgReceived(msg, srcif)
+                print("Received message '%s' from %s" % (msg, srcif))
+            
+        return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='route packets')
