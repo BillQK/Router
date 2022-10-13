@@ -16,9 +16,8 @@ class ForwardingTables:
             print(e)
 
     def convertToBinary(self, msg):
-        msg1 = msg["msg"]
-        prefix = msg1["network"]
-        netmask = msg1["netmask"]
+        prefix = msg["network"]
+        netmask = msg["netmask"]
         
         #converting to eventually check withe netmask(count the ones)
         #with the number that has the correct amount depending on the netmask
@@ -35,7 +34,8 @@ class ForwardingTables:
         for i in nlist:
             testlist.append(i.zfill(8))
 
-        str = '.'.join(testlist)  
+        str = '.'.join(testlist)
+        num = self.countOnes(str)  
 
         print(str)    
         #index = countOnes(bnetmask)
@@ -113,7 +113,23 @@ class Router:
             self.send(n, json.dumps(msg))
 
     def dataMsg(self, srcif, msg):
-        pass
+        msgdest = msg["dst"]
+        msgsrc = msg["src"]
+
+        ipto = ""
+        ipfrom = ""
+
+        for sip in self.LoN:
+            if(msgsrc.startswith(sip)):
+                ipto = sip
+
+        for dip in self.LoN:
+            if(msgdest.startswith(dip)):
+                ipfrom = dip
+
+        self.send(ipfrom, json.dumps(msg))          
+
+
 
     # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
@@ -125,8 +141,8 @@ class Router:
         if (data["type"] == 'data'): 
             self.dataMsg(srcif,data) 
 
-        #if (data["type"] == 'dump'):
-        #    self.dumpMsg(srcif, data)
+        if (data["type"] == 'dump'):
+            self.dumpMsg(srcif, data)
 
     def run(self):
         while True:
