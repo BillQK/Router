@@ -114,19 +114,24 @@ class Router:
 
     def dataMsg(self, srcif, msg):
         msgdest = msg["dst"]
-        msgsrc = msg["src"]
-
-        ipto = ""
         ipfrom = ""
 
-        for sip in self.LoN:
-            if(msgsrc.startswith(sip)):
-                ipto = sip
+        firstnums = msgdest.split(".")
+        print(firstnums)
+        if(firstnums[0] == "192"):
+            print("made it here")
+            ipfrom = self.LoN[0]
+        if(firstnums[0] == "172"):
+            print("made it here")
+            ipfrom = self.LoN[1]
+        if(firstnums[0] == "11"):
+            ipfrom = self.LoN[2]
 
-        for dip in self.LoN:
-            if(msgdest.startswith(dip)):
-                ipfrom = dip
-
+        #for dip in self.LoN:
+        #    if(msgdest.startswith(dip)):
+        #        ipfrom = dip
+        
+        print(ipfrom)
         self.send(ipfrom, json.dumps(msg))          
 
 
