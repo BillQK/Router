@@ -5,10 +5,10 @@ import argparse, socket, time, json, select, struct, sys, math, copy, re
 #another test
 class ForwardingTables: 
     def __init__(self):
-        self.entries = {}
+        self.entries = []
         self.testrouting = {}
     # Add entries 
-    def add_entries(self, srcif, msg): 
+    def add_entries(self, msg): 
         self.entries.append(msg);
 
     def printData(self):
@@ -121,6 +121,7 @@ class Router:
             copypath.append(i)   
 
         self.fowardTable.addToRouting(msg)
+        self.fowardTable.add_entries(msg)
 
         if self.relations[srcif] == 'cust':
             for n in self.LoN: 
