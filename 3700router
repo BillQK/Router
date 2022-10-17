@@ -120,9 +120,6 @@ class Router:
                 "selfOrigin" : n['msg']['selfOrigin']
             }
             LoT.append(format)
-            
-
-        
         return LoT
 
     def dumpMsg(self, srcif, msg): 
