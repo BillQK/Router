@@ -5,12 +5,16 @@ import argparse, socket, time, json, select, struct, sys, math, copy, re
 #another test
 class ForwardingTables: 
     def __init__(self):
+<<<<<<< HEAD
         self.entries = {}
         self.testrouting = {}
 
+=======
+        self.entries = []
+>>>>>>> 3969888ed7d88ae77bcbcec4edb67be4dabebace
     # Add entries 
     def add_entries(self, srcif, msg): 
-        self.entries[srcif] = msg
+        self.entries.append(msg);
 
     def printData(self):
         for e in self.entries.values() : 
@@ -116,12 +120,16 @@ class Router:
 
     # Update MSG and foward announcement 
     def updateMSG(self, srcif, msg): 
+<<<<<<< HEAD
         self.LoA = msg
         copypath = [self.asn]
         for i in msg["msg"]['ASPath']:
             copypath.append(i)   
 
         self.fowardTable.addToRouting(msg)
+=======
+        self.fowardTable.add_entries(srcif, msg)
+>>>>>>> 3969888ed7d88ae77bcbcec4edb67be4dabebace
 
         if self.relations[srcif] == 'cust':
             for n in self.LoN: 
@@ -139,12 +147,46 @@ class Router:
                      
                     self.send(n, json.dumps(msgCopy))   
 
+    def dumpTableConfig(self, LoM): 
+        LoT = []
+        id = 0 
+        for n in reversed(LoM): 
+            src = n['src']
+            format = {
+                "origin" : n['msg']['origin'],
+                "localpref" : n['msg']['localpref'], 
+                "network" : n['msg']['network'],
+                "ASPath" : n['msg']['ASPath'],
+                "netmask" : n['msg']['netmask'],
+                "peer" : src,
+                "selfOrigin" : n['msg']['selfOrigin']
+            }
+            LoT.append(format)
+        return LoT
+
     def dumpMsg(self, srcif, msg): 
         # generate dump message in correct format
+<<<<<<< HEAD
         # odo: Make aggregation in forwarding table
         for n in self.LoN: 
             self.send(n, json.dumps(msg))
             
+=======
+        # Todo: Make aggregation in forwarding table
+        LoM = self.fowardTable.entries
+        table = self.dumpTableConfig(LoM) 
+        jsonFormat = json.dumps(
+            {
+                "src" : srcif[:-1] + '1',        
+                "dst" : srcif,   
+                "type": "table",
+                "msg" : table
+            }
+        )
+        print(jsonFormat)
+        self.send(srcif, jsonFormat )
+
+>>>>>>> 3969888ed7d88ae77bcbcec4edb67be4dabebace
     def dataMsg(self, srcif, msg):
         msgdest = msg["dst"]
         ipfrom = ""
@@ -163,8 +205,6 @@ class Router:
         print("the length of the matching networks with this string is " + str(len(testlist[0])))        
         
         self.send(ipfrom, json.dumps(msg))          
-
-
 
     # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
