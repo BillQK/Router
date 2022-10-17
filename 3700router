@@ -5,13 +5,8 @@ import argparse, socket, time, json, select, struct, sys, math, copy, re
 #another test
 class ForwardingTables: 
     def __init__(self):
-<<<<<<< HEAD
         self.entries = {}
         self.testrouting = {}
-
-=======
-        self.entries = []
->>>>>>> 3969888ed7d88ae77bcbcec4edb67be4dabebace
     # Add entries 
     def add_entries(self, srcif, msg): 
         self.entries.append(msg);
@@ -120,16 +115,12 @@ class Router:
 
     # Update MSG and foward announcement 
     def updateMSG(self, srcif, msg): 
-<<<<<<< HEAD
         self.LoA = msg
         copypath = [self.asn]
         for i in msg["msg"]['ASPath']:
             copypath.append(i)   
 
         self.fowardTable.addToRouting(msg)
-=======
-        self.fowardTable.add_entries(srcif, msg)
->>>>>>> 3969888ed7d88ae77bcbcec4edb67be4dabebace
 
         if self.relations[srcif] == 'cust':
             for n in self.LoN: 
@@ -166,12 +157,6 @@ class Router:
 
     def dumpMsg(self, srcif, msg): 
         # generate dump message in correct format
-<<<<<<< HEAD
-        # odo: Make aggregation in forwarding table
-        for n in self.LoN: 
-            self.send(n, json.dumps(msg))
-            
-=======
         # Todo: Make aggregation in forwarding table
         LoM = self.fowardTable.entries
         table = self.dumpTableConfig(LoM) 
@@ -186,7 +171,6 @@ class Router:
         print(jsonFormat)
         self.send(srcif, jsonFormat )
 
->>>>>>> 3969888ed7d88ae77bcbcec4edb67be4dabebace
     def dataMsg(self, srcif, msg):
         msgdest = msg["dst"]
         ipfrom = ""
