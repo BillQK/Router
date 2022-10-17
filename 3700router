@@ -1,11 +1,12 @@
 #!/usr/bin/env -S python3 -u
 
-import argparse, socket, time, json, select, struct, sys, math, copy
+import argparse, socket, time, json, select, struct, sys, math, copy, re
 
 #another test
 class ForwardingTables: 
     def __init__(self):
         self.entries = {}
+        self.testrouting = {}
 
     # Add entries 
     def add_entries(self, srcif, msg): 
@@ -14,6 +15,33 @@ class ForwardingTables:
     def printData(self):
         for e in self.entries.values() : 
             print(e)
+
+    def addToRouting(self, msg):
+        routeinfo = []
+        peer = msg["src"]
+        #have a port field in there as well
+
+        network = msg["msg"]["network"]
+        netmask = msg['msg']['netmask']
+
+        prefixednetwork = self.determinenetwork(network, netmask)
+        self.testrouting.setdefault(prefixednetwork, [])
+        self.testrouting[prefixednetwork].append(peer)
+
+       #subnet mask/bitwise operations, and get the network ip 
+    def determinenetwork(self, network, netmask):
+        test = []
+        pattern = re.compile(r'255')
+        matches = pattern.findall(netmask)
+        network = network.split(".")
+
+        for i in range(len(matches)):
+            test.append(network[i])
+
+        test = '.'.join(test)
+
+        return test
+
 
     def convertToBinary(self, msg):
         prefix = msg["network"]
@@ -57,7 +85,6 @@ class Router:
     sockets = {}
     ports = {}
 
-
     def __init__(self, asn, connections):
         print("Router at AS %s starting up" % asn)
         self.asn = asn
@@ -71,6 +98,7 @@ class Router:
             port, neighbor, relation = relationship.split("-")
 
             self.LoN.append(neighbor)
+            print(self.LoN)
             self.sockets[neighbor] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sockets[neighbor].bind(('localhost', 0))
             self.ports[neighbor] = int(port)
@@ -89,6 +117,11 @@ class Router:
     # Update MSG and foward announcement 
     def updateMSG(self, srcif, msg): 
         self.LoA = msg
+        copypath = [self.asn]
+        for i in msg["msg"]['ASPath']:
+            copypath.append(i)   
+
+        self.fowardTable.addToRouting(msg)
 
         if self.relations[srcif] == 'cust':
             for n in self.LoN: 
@@ -96,7 +129,7 @@ class Router:
                     msgCopy = {
                         "msg":  { #Copy msg 
                             "netmask" : msg["msg"]["netmask"],
-                            "ASPath" :  [self.asn , msg["msg"]["ASPath"][0]],
+                            "ASPath" :  copypath,
                             "network" : msg["msg"]["network"]
                         }, 
                         "src": n[:-1] + '1',
@@ -111,27 +144,24 @@ class Router:
         # odo: Make aggregation in forwarding table
         for n in self.LoN: 
             self.send(n, json.dumps(msg))
-
+            
     def dataMsg(self, srcif, msg):
         msgdest = msg["dst"]
         ipfrom = ""
 
-        firstnums = msgdest.split(".")
-        print(firstnums)
-        if(firstnums[0] == "192"):
-            print("made it here")
-            ipfrom = self.LoN[0]
-        if(firstnums[0] == "172"):
-            print("made it here")
-            ipfrom = self.LoN[1]
-        if(firstnums[0] == "11"):
-            ipfrom = self.LoN[2]
+        testlist = []
 
-        #for dip in self.LoN:
-        #    if(msgdest.startswith(dip)):
-        #        ipfrom = dip
+        #looks through the forwawrding table that I created with the prefixes with correct netmask
+        #then looks through and determines which prefix best matches and then sends to it
+        for x in self.fowardTable.testrouting:
+            if(msgdest.startswith(x)):
+                testlist.append(self.fowardTable.testrouting[x])
+                ipfrom = self.fowardTable.testrouting[x][0]
+
+                
+        print("entries currently that match " + str(testlist))        
+        print("the length of the matching networks with this string is " + str(len(testlist[0])))        
         
-        print(ipfrom)
         self.send(ipfrom, json.dumps(msg))          
 
 
