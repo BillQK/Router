@@ -30,11 +30,10 @@ class ForwardingTables:
         LoN = self.origin(LoN)
         
 
-        if LoN:
-            for k,v in LoN.items(): 
-                return k
-        else: 
-            return None
+        prefixednetwork = self.determinenetwork(network, netmask)
+        self.testrouting.setdefault(prefixednetwork, [])
+        self.testrouting[prefixednetwork].append(routeinfo)
+        #print("this is what is being added to the list " + str(self.testrouting[prefixednetwork]))
 
 
     def origin(self, LoNs): 
