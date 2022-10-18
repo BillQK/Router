@@ -46,8 +46,15 @@ class ForwardingTables:
             print(e)
 
     def addToRouting(self, msg):
-        routeinfo = []
         peer = msg["src"]
+        lpref = msg['msg']['localpref']
+        selforigin = msg['msg']['selfOrigin']
+        aspath = msg['msg']['ASPath']
+        #origin
+        #src with the lowest ip address
+
+        routeinfo = [peer, lpref, selforigin, aspath]
+
         #have a port field in there as well
 
         network = msg["msg"]["network"]
@@ -55,7 +62,8 @@ class ForwardingTables:
 
         prefixednetwork = self.determinenetwork(network, netmask)
         self.testrouting.setdefault(prefixednetwork, [])
-        self.testrouting[prefixednetwork].append(peer)
+        self.testrouting[prefixednetwork].append(routeinfo)
+        #print("this is what is being added to the list " + str(self.testrouting[prefixednetwork]))
 
        #subnet mask/bitwise operations, and get the network ip 
     def determinenetwork(self, network, netmask):
@@ -70,7 +78,6 @@ class ForwardingTables:
         test = '.'.join(test)
 
         return test
-
 
     def convertToBinary(self, msg):
         prefix = msg["network"]
@@ -201,11 +208,40 @@ class Router:
         print(jsonFormat)
         self.send(srcif, jsonFormat )
 
+    def determinebestpref(self, routes):
+        if(len(routes) == 1):
+            return routes
+
+        returnlist = []
+        currenthighest = routes[0][1]
+        for entry in routes:
+            if(entry[1] > currenthighest):
+                returnlist.clear()
+                returnlist.append(entry)
+                currenthighest = entry[1]
+            elif(entry[1] == currenthighest):
+                returnlist.append(entry)
+
+        return returnlist
+
+    def determinebestorg(self, routes):
+        if(len(routes) == 1):
+            return routes
+
+        returnlist = []
+        for entry in routes:
+            if(entry[2] == True):
+                returnlist.append(entry)
+
+        return returnlist
+
+
+
     def dataMsg(self, srcif, msg):
         msgdest = msg["dst"]
         ipfrom = ""
 
-        testlist = []
+        matches = []
 
         #looks through the forwawrding table that I created with the prefixes with correct netmask
         #then looks through and determines which prefix best matches and then sends to it
@@ -214,15 +250,38 @@ class Router:
         #afterwards, then it sends to the correct ip associated with it
 
         #multiple networks can share the ip
-
+        
+        #have to add in implementation for all those that work,
         for x in self.fowardTable.testrouting:
             if(msgdest.startswith(x)):
-                testlist.append(self.fowardTable.testrouting[x])
-                ipfrom = self.fowardTable.testrouting[x][0]
+                matches.append(x)
+                #ipfrom = self.fowardTable.testrouting[x][0]
+
+        #checks how many networks are attached to this destination        
+        if(len(matches) == 0):
+            #this is where we would have a no route
+            pass
+
+        if(len(matches) == 2):
+            #this is where we would have multiple entries for the destination network,
+            #then we would need to find the longest path
+            ipfrom = self.determinebestroute(matches)    
+
+        if(len(matches) == 1):
+            m = matches[0]
+            print(self.fowardTable.testrouting[m])
+            network1 = self.determinebestpref(self.fowardTable.testrouting[m])
+            network = self.determinebestorg(network1)
+            ipfrom = network[0][0]
+            #these calls will be nested within each other
+            #then since it is guarenteed that there will be no ties, this should find the best network,
+            #there should then only be one item in the list, and then we always send to the ip which responds to the 0s index
+            print(ipfrom)
+
 
                 
-        print("entries currently that match " + str(testlist))        
-        print("the length of the matching networks with this string is " + str(len(testlist[0])))        
+        #print("what the entries look like " + str(testlist))        
+        #print("the length of the matching networks with this string is " + str(len(testlist[0])))        
         
         self.send(ipfrom, json.dumps(msg))          
 
