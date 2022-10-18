@@ -8,6 +8,35 @@ class ForwardingTables:
         self.entries = []
         self.testrouting = {}
 
+        #networks/netmasks, then the ips for it, for routing stuff
+        #{172.169, 172.168.0.2}
+        #{12, 192.169.0.2, 10.0.0.2}
+
+        #{192, 192.168}
+        #{172, 172.169}
+        #{12, 12.0.0.25}
+
+        #update
+        #172.168.0.2, connected to router(peer), updated
+        #add this in like a list {172, 172.168.0.2, 172.169.0.1}
+        #when someone sends a message
+        #we want to a send some data to this ip
+        #172.169.0.25 network thats being transmitted
+        #if theres two examples of the entworks
+        #compare and then send data to 172.169.0.1(closer to what its asking for?)
+
+        #10.0.0.2
+        #{10, 10.0.02}
+        #one of the networks being send data is
+        #11.0.0.25
+        #port that don't know
+
+        #192.168.1.25
+        #two networks -> 12.0.0.25, and connected 192.168.
+        #{12.0.0}
+
+        #{network, and the subsequent fields: ips with it}
+
     # Add entries 
     def add_entries(self, srcif, msg): 
         self.entries.append(msg)
@@ -180,6 +209,12 @@ class Router:
 
         #looks through the forwawrding table that I created with the prefixes with correct netmask
         #then looks through and determines which prefix best matches and then sends to it
+        
+        #looks through the forwarding table, the destination starts with the prefix of the network, network + netmask
+        #afterwards, then it sends to the correct ip associated with it
+
+        #multiple networks can share the ip
+
         for x in self.fowardTable.testrouting:
             if(msgdest.startswith(x)):
                 testlist.append(self.fowardTable.testrouting[x])
