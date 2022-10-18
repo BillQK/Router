@@ -5,14 +5,15 @@ import argparse, socket, time, json, select, struct, sys, math, copy, re
 #another test
 class ForwardingTables: 
     def __init__(self):
-        self.entries = {}
+        self.entries = []
         self.testrouting = {}
+
     # Add entries 
     def add_entries(self, srcif, msg): 
-        self.entries.append(msg);
+        self.entries.append(msg)
 
     def printData(self):
-        for e in self.entries.values() : 
+        for e in self.entries.values(): 
             print(e)
 
     def addToRouting(self, msg):
@@ -141,7 +142,7 @@ class Router:
     def dumpTableConfig(self, LoM): 
         LoT = []
         id = 0 
-        for n in reversed(LoM): 
+        for n in LoM: 
             src = n['src']
             format = {
                 "origin" : n['msg']['origin'],
