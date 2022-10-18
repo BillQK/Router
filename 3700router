@@ -5,7 +5,7 @@ import argparse, socket, time, json, select, struct, sys, math, copy, re
 #another test
 class ForwardingTables: 
     def __init__(self):
-        self.entries = []
+        self.entries = [] 
         
     # Add entries 
     def add_entries(self, srcif, msg): 
@@ -28,9 +28,8 @@ class ForwardingTables:
         LoN = self.selfOrigin(LoN)
         LoN = self.asPath(LoN)
         LoN = self.origin(LoN)
-
-
         
+
         if LoN:
             for k,v in LoN.items(): 
                 return k
@@ -41,9 +40,17 @@ class ForwardingTables:
     def origin(self, LoNs): 
         LoN = {}
         best_origin = "UNK"
+
         for k, v in LoNs.items(): 
-            pass
-        return LoNs
+            if v['origin'] == "EGP": 
+                best_origin = "EGP"
+            elif v['origin'] == "IGP": 
+                best_origin = "IGP"
+
+        for k, v in LoNs.items():
+            if v['origin'] == best_origin:
+                LoN[k] = v
+        return LoN
 
     def asPath(self,LoNs):
         LoN = {}
@@ -77,7 +84,7 @@ class ForwardingTables:
         for k, v in LoNs.items():
             if v['localpref'] > max_pref:
                 max_pref = v['localpref']
-        
+                
         for k, v in LoNs.items():
             if v['localpref'] == max_pref:
                 routes[k] = v
@@ -92,10 +99,13 @@ class ForwardingTables:
         for k, v in LoNs.items():
             columnsCounter = 0 
             LoNetmask = v['netmask'].split(".")
+            LoNetwork = v['network'].split(".")
             m_bits = None
             d_bits = None
+            n_bits = None
         
-            for IPcolumns in range(4): 
+            for IPcolumns in range(4):
+                n_bits = self.convertToBinary(LoNetwork[IPcolumns])
                 m_bits = self.convertToBinary(LoNetmask[IPcolumns])
                 d_bits = self.convertToBinary(LoD[IPcolumns])
 
@@ -103,11 +113,12 @@ class ForwardingTables:
             consecutiveOnes = self.countConsecutiveOnes(m_bits)
             while (len(masked_N) != 32):
                 b_count = 0 
-                if (consecutiveOnes != b_count):
+                if (n_bits[b_count] == "1" and m_bits[b_count] == "1"):
                     masked_N += "1"
                     b_count += 1
                 else: 
                     masked_N += "0"
+                    b_count += 1
 
             for a in range(len(masked_N)): 
                 if masked_N[a] == d_bits[a]: 
@@ -239,9 +250,10 @@ class Router:
             # to check with shortest ASPath. if equal cost -> 
             # to check with origin. Where IGP > EGP > UNK -> 
             # to check lowest ip 
-
-        self.send(ip_address, json.dumps(msg))      
-
+        if ip_address: 
+            self.send(ip_address, json.dumps(msg))      
+        else: 
+            self.send(srcif, json.dump(""))
     # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
         data = json.loads(msg); 
