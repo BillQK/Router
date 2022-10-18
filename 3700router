@@ -6,74 +6,133 @@ import argparse, socket, time, json, select, struct, sys, math, copy, re
 class ForwardingTables: 
     def __init__(self):
         self.entries = []
-        self.testrouting = {}
-    # Add entries 
-    def add_entries(self, msg): 
-        self.entries.append(msg);
-
-    def printData(self):
-        for e in self.entries.values() : 
-            print(e)
-
-    def addToRouting(self, msg):
-        routeinfo = []
-        peer = msg["src"]
-        #have a port field in there as well
-
-        network = msg["msg"]["network"]
-        netmask = msg['msg']['netmask']
-
-        prefixednetwork = self.determinenetwork(network, netmask)
-        self.testrouting.setdefault(prefixednetwork, [])
-        self.testrouting[prefixednetwork].append(peer)
-
-       #subnet mask/bitwise operations, and get the network ip 
-    def determinenetwork(self, network, netmask):
-        test = []
-        pattern = re.compile(r'255')
-        matches = pattern.findall(netmask)
-        network = network.split(".")
-
-        for i in range(len(matches)):
-            test.append(network[i])
-
-        test = '.'.join(test)
-
-        return test
-
-
-    def convertToBinary(self, msg):
-        prefix = msg["network"]
-        netmask = msg["netmask"]
         
-        #converting to eventually check withe netmask(count the ones)
-        #with the number that has the correct amount depending on the netmask
-        #then thats the address that we send things to?
+    # Add entries 
+    def add_entries(self, srcif, msg): 
+        self.entries.append(msg);
+        self.entries[len(self.entries)-1]['src'] = srcif 
 
-        separatedecimal = prefix.split(".")
-        print(separatedecimal)
-        nlist = []
-        testlist = []
+    def getOptimalIP(self, srcif, dest): 
+        destPrefix = dest[:dest.find(".")]
+        
+        LoN = {}
 
-        for i in separatedecimal:
-            nlist.append(bin(int(i)).replace("0b", ""))
+        for entry in self.entries: 
+            prefNet = entry['network']
+            prefNet = prefNet[:prefNet.find(".")]
+            if destPrefix == prefNet: 
+                LoN[entry['src']] = entry
 
-        for i in nlist:
-            testlist.append(i.zfill(8))
+        LoN = self.longestPrefixMatch(LoN, dest)
+        LoN = self.maxPref(LoN)
+        LoN = self.selfOrigin(LoN)
+        LoN = self.asPath(LoN)
+        LoN = self.origin(LoN)
 
-        str = '.'.join(testlist)
-        num = self.countOnes(str)  
 
-        print(str)    
-        #index = countOnes(bnetmask)
-        #for index through length, replace that value with 0
+        
+        if LoN:
+            for k,v in LoN.items(): 
+                return k
+        else: 
+            return None
+
+
+    def origin(self, LoNs): 
+        LoN = {}
+        best_origin = "UNK"
+        for k, v in LoNs.items(): 
+            pass
+        return LoNs
+
+    def asPath(self,LoNs):
+        LoN = {}
+        largest_number = float("inf")
+        for k, v in LoNs.items(): 
+            if len(v['ASPath']) < largest_number:
+                largest_number = len(v['ASPath'])
+            
+        for k ,v in LoNs.items():
+            if len(v['ASPath']) == largest_number:
+                LoN[k] = v
+
+        return LoN
+
+    def selfOrigin(self, LoNs):
+        LoN = {}
+        
+        for k , v in LoNs.items():
+            if v['selfOrigin']:
+                LoN[k] = v
+        
+        if LoN:
+            return LoN
+        else: 
+            return LoNs
+
+    def maxPref(self, LoNs): 
+        max_pref = float('-inf')
+        routes = {} 
+
+        for k, v in LoNs.items():
+            if v['localpref'] > max_pref:
+                max_pref = v['localpref']
+        
+        for k, v in LoNs.items():
+            if v['localpref'] == max_pref:
+                routes[k] = v
+
+        return routes
+
+    def longestPrefixMatch(self, LoNs, dest): 
+        LoD = dest.split(".")
+        LoN = {} 
+        matchingCounter = float('-inf')
+
+        for k, v in LoNs.items():
+            columnsCounter = 0 
+            LoNetmask = v['netmask'].split(".")
+            m_bits = None
+            d_bits = None
+        
+            for IPcolumns in range(4): 
+                m_bits = self.convertToBinary(LoNetmask[IPcolumns])
+                d_bits = self.convertToBinary(LoD[IPcolumns])
+
+            masked_N = ""
+            consecutiveOnes = self.countConsecutiveOnes(m_bits)
+            while (len(masked_N) != 32):
+                b_count = 0 
+                if (consecutiveOnes != b_count):
+                    masked_N += "1"
+                    b_count += 1
+                else: 
+                    masked_N += "0"
+
+            for a in range(len(masked_N)): 
+                if masked_N[a] == d_bits[a]: 
+                    columnsCounter += 1
+                else: 
+                    break
+            if columnsCounter >= matchingCounter: 
+                matchingCounter = columnsCounter
+                LoN[k] = v
+    
+        return LoN
+
+
+    def convertToBinary(self, ip):
+        return format(int(ip), "b")
 
     #returns the count of a given netmask in ones to know how much to index by    
-    def countOnes(self, bnetmask):
+    def countConsecutiveOnes(self, bnetmask):
         count = 0
         for i in bnetmask:
             if(i == 1):
                 count +=1
+            else: 
+                break 
+        return count 
                   
  
 
@@ -97,7 +156,6 @@ class Router:
             port, neighbor, relation = relationship.split("-")
 
             self.LoN.append(neighbor)
-            print(self.LoN)
             self.sockets[neighbor] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sockets[neighbor].bind(('localhost', 0))
             self.ports[neighbor] = int(port)
@@ -120,8 +178,7 @@ class Router:
         for i in msg["msg"]['ASPath']:
             copypath.append(i)   
 
-        self.fowardTable.addToRouting(msg)
-        self.fowardTable.add_entries(msg)
+        self.fowardTable.add_entries(srcif, msg['msg'])
 
         if self.relations[srcif] == 'cust':
             for n in self.LoN: 
@@ -145,13 +202,13 @@ class Router:
         for n in reversed(LoM): 
             src = n['src']
             format = {
-                "origin" : n['msg']['origin'],
-                "localpref" : n['msg']['localpref'], 
-                "network" : n['msg']['network'],
-                "ASPath" : n['msg']['ASPath'],
-                "netmask" : n['msg']['netmask'],
+                "origin" : n['origin'],
+                "localpref" : n['localpref'], 
+                "network" : n['network'],
+                "ASPath" : n['ASPath'],
+                "netmask" : n['netmask'],
                 "peer" : src,
-                "selfOrigin" : n['msg']['selfOrigin']
+                "selfOrigin" : n['selfOrigin']
             }
             LoT.append(format)
         return LoT
@@ -173,23 +230,17 @@ class Router:
         self.send(srcif, jsonFormat )
 
     def dataMsg(self, srcif, msg):
-        msgdest = msg["dst"]
-        ipfrom = ""
+        dest = msg['dst']
 
-        testlist = []
+        ip_address = ForwardingTables.getOptimalIP(self.fowardTable, srcif, dest)
+            # to check with the longest prefix if have multiple prefix matches -> 
+            # to check with the localpref. if localpref -> 
+            # to check with the selforigin. if all true -> 
+            # to check with shortest ASPath. if equal cost -> 
+            # to check with origin. Where IGP > EGP > UNK -> 
+            # to check lowest ip 
 
-        #looks through the forwawrding table that I created with the prefixes with correct netmask
-        #then looks through and determines which prefix best matches and then sends to it
-        for x in self.fowardTable.testrouting:
-            if(msgdest.startswith(x)):
-                testlist.append(self.fowardTable.testrouting[x])
-                ipfrom = self.fowardTable.testrouting[x][0]
-
-                
-        print("entries currently that match " + str(testlist))        
-        print("the length of the matching networks with this string is " + str(len(testlist[0])))        
-        
-        self.send(ipfrom, json.dumps(msg))          
+        self.send(ip_address, json.dumps(msg))      
 
     # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
@@ -226,5 +277,4 @@ if __name__ == "__main__":
     parser.add_argument('connections', metavar='connections', type=str, nargs='+', help="connections")
     args = parser.parse_args()
     router = Router(args.asn, args.connections)
-    # router = Router(7, {"7833-1.2.3.2-cust", "2374-192.168.0.2-peer" ,"1293-67.32.9.2-prov"})
     router.run()
