@@ -11,10 +11,17 @@ class ForwardingTables:
     def add_entries(self, srcif, msg): 
         self.entries.append(msg)
         self.entries[len(self.entries)-1]['src'] = srcif
-        
-    def remove_entries(self, srcif, msg): 
-        pass
 
+    def remove_entries(self, srcif, msg): 
+        k = None
+        for n in self.entries:
+            for m in msg['msg']: 
+                if n['src'] == srcif and n['network'] == m['network']:
+                   k = n  
+        
+        self.entries.remove(k)
+          
+    
     def getOptimalIP(self, srcif, dest):
         destPrefix = dest[:dest.find(".")]
         
@@ -186,44 +193,44 @@ class ForwardingTables:
         return prefix      
          
 
-    def longestPrefixMatch(self, LoNs, dest):  
-        LoD = dest.split(".")
-        LoN = {} 
-        matchingCounter = float('-inf')
+    # def longestPrefixMatch(self, LoNs, dest):  
+    #     LoD = dest.split(".")
+    #     LoN = {} 
+    #     matchingCounter = float('-inf')
 
-        for k, v in LofNe.items():
-            columnsCounter = 0 
-            LoNetmask = v['netmask'].split(".")
-            LoNetwork = v['network'].split(".")
-            m_bits = None
-            d_bits = None
-            n_bits = None
+    #     for k, v in LofNe.items():
+    #         columnsCounter = 0 
+    #         LoNetmask = v['netmask'].split(".")
+    #         LoNetwork = v['network'].split(".")
+    #         m_bits = None
+    #         d_bits = None
+    #         n_bits = None
         
-            for IPcolumns in range(4):
-                n_bits = self.convertToBinary(LoNetwork[IPcolumns])
-                m_bits = self.convertToBinary(LoNetmask[IPcolumns])
-                d_bits = self.convertToBinary(LoD[IPcolumns])
+    #         for IPcolumns in range(4):
+    #             n_bits = self.convertToBinary(LoNetwork[IPcolumns])
+    #             m_bits = self.convertToBinary(LoNetmask[IPcolumns])
+    #             d_bits = self.convertToBinary(LoD[IPcolumns])
 
-            masked_N = ""
-            while (len(masked_N) != 32):
-                b_count = 0 
-                if (n_bits[b_count] == "1" and m_bits[b_count] == "1"):
-                    masked_N += "1"
-                    b_count += 1
-                else: 
-                    masked_N += "0"
-                    b_count += 1
+    #         masked_N = ""
+    #         while (len(masked_N) != 32):
+    #             b_count = 0 
+    #             if (n_bits[b_count] == "1" and m_bits[b_count] == "1"):
+    #                 masked_N += "1"
+    #                 b_count += 1
+    #             else: 
+    #                 masked_N += "0"
+    #                 b_count += 1
 
-            for a in range(len(masked_N)): 
-                if masked_N[a] == d_bits[a]: 
-                    columnsCounter += 1
-                else: 
-                    break
-            if columnsCounter >= matchingCounter: 
-                matchingCounter = columnsCounter
-                LoN[k] = v
+    #         for a in range(len(masked_N)): 
+    #             if masked_N[a] == d_bits[a]: 
+    #                 columnsCounter += 1
+    #             else: 
+    #                 break
+    #         if columnsCounter >= matchingCounter: 
+    #             matchingCounter = columnsCounter
+    #             LoN[k] = v
     
-        return LoN
+    #     return LoN
 
 
     def convertToBinary(self, ip):
@@ -381,8 +388,8 @@ class Router:
 
     def withDrawMsg(self,srcif, msg): 
         self.LoA.append(msg)
-        self.fowardTable.add_entries(msg)
-        self.fowardTable.remove_entries(srcif, -msg)
+        self.fowardTable.remove_entries(srcif, msg)
+
 
     # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
