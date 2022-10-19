@@ -380,6 +380,7 @@ class Router:
         "type": "no route",
         "msg": {}}
 
+        print("this is what the ipaddress var is " + str(ip_address))
         if ip_address: 
             self.send(ip_address, json.dumps(msg))      
         else: 
