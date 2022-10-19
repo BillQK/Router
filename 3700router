@@ -312,10 +312,9 @@ class Router:
                     self.send(n, json.dumps(msgCopy))
 
         #probably something kinda like this for peering            
-        if self.relations[srcif] == 'peer' or self.relations[srcif] == 'prov':
+        elif self.relations[srcif] == 'peer' or self.relations[srcif] == 'prov':
             for n in self.LoN:
                 if self.relations[n] == 'cust':
-
                     msgCopy = {
                         "msg":  {
                             "netmask" : msg["msg"]["netmask"],
