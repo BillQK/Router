@@ -12,6 +12,9 @@ class ForwardingTables:
         self.entries.append(msg);
         self.entries[len(self.entries)-1]['src'] = srcif 
 
+    def remove_entries(self, srcif, msg): 
+        pass
+
     def getOptimalIP(self, srcif, dest): 
         destPrefix = dest[:dest.find(".")]
         
@@ -210,7 +213,7 @@ class Router:
 
     # Update MSG and foward announcement 
     def updateMSG(self, srcif, msg): 
-        self.LoA = msg
+        self.LoA.append(msg)
         copypath = [self.asn]
         for i in msg["msg"]['ASPath']:
             copypath.append(i)   
@@ -263,7 +266,6 @@ class Router:
                 "msg" : table
             }
         )
-        print(jsonFormat)
         self.send(srcif, jsonFormat )
 
     def dataMsg(self, srcif, msg):
@@ -280,6 +282,12 @@ class Router:
             self.send(ip_address, json.dumps(msg))      
         else: 
             self.send(srcif, json.dump(""))
+
+    def withDrawMsg(self,srcif, msg): 
+        self.LoA.append(msg)
+        self.fowardTable.add_entries(msg)
+        self.fowardTable.remove_entries(srcif, -msg)
+
     # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
         data = json.loads(msg); 
@@ -292,6 +300,9 @@ class Router:
 
         if (data["type"] == 'dump'):
             self.dumpMsg(srcif, data)
+
+        if (data["type"] == "withdraw"): 
+            self.withDrawMsg(srcif, data)
 
     def run(self):
         while True:
