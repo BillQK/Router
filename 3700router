@@ -38,7 +38,10 @@ class ForwardingTables:
         LoN = self.eliminatingIp(LoN, dest)
 
         if LoN:
+            
             for k,v in LoN.items():
+                if k is None:
+                    print(srcif + "this is a bad route")
                 return k       
         else: 
             return None
