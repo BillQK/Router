@@ -9,10 +9,10 @@ class ForwardingTables:
         
     # Add entries 
     def add_entries(self, srcif, msg): 
-        self.entries.append(msg);
-        self.entries[len(self.entries)-1]['src'] = srcif 
+        self.entries.append(msg)
+        self.entries[len(self.entries)-1]['src'] = srcif
 
-    def getOptimalIP(self, srcif, dest): 
+    def getOptimalIP(self, srcif, dest):
         destPrefix = dest[:dest.find(".")]
         
         LoN = {}
@@ -23,18 +23,22 @@ class ForwardingTables:
             if destPrefix == prefNet: 
                 LoN[entry['src']] = entry
 
-        LoN = self.longestPrefixMatch(LoN, dest)
+       
+        print("again this is what the list of neighbors has " + str(LoN))
+
+        LoN = self.testlongestPrefixMatch(LoN, dest)
         LoN = self.maxPref(LoN)
         LoN = self.selfOrigin(LoN)
         LoN = self.asPath(LoN)
         LoN = self.origin(LoN)
-        
 
-        prefixednetwork = self.determinenetwork(network, netmask)
-        self.testrouting.setdefault(prefixednetwork, [])
-        self.testrouting[prefixednetwork].append(routeinfo)
-        #print("this is what is being added to the list " + str(self.testrouting[prefixednetwork]))
+        print(LoN) 
 
+        if LoN:
+            for k,v in LoN.items():
+                return k
+        else:
+            return None        
 
     def origin(self, LoNs): 
         LoN = {}
@@ -89,6 +93,71 @@ class ForwardingTables:
                 routes[k] = v
 
         return routes
+
+    def testlongestPrefixMatch(self, LoNs, dest):
+        LoN = {}
+        largestmatch = float('-inf')
+        for k, v in LoNs.items():
+            netprefix = self.convertbinary(v['network'], self.findnetmask(v['netmask']))
+            if(dest.startswith(netprefix)):
+                val = len(netprefix)
+                if(val > largestmatch):
+                    largestmatch = val
+
+        for k, v in LoNs.items():
+            netprefix = self.convertbinary(v['network'], self.findnetmask(v['netmask']))
+            if(len(netprefix) == largestmatch):
+                LoN[k] = v
+
+        return LoN                     
+
+
+    def findnetmask(self, netmask):
+        count = 0
+        nsplit = netmask.split('.')
+        binary = []
+        for i in nsplit:
+            binary.append((bin(int(i)).replace('0b',"")).zfill(8))  
+
+        num = "".join(binary)
+        for i in num:
+            if i == '1':
+                count += 1
+
+        return count   
+
+
+     #probably the most convoluted way to generate the prefix of a string...
+    def convertbinary(self, network, netmask):
+        #this is to split it up, and then calculate each deciman version of the binary string, 
+        # then evetually fill it to be what we need
+        nsplit = network.split('.')
+        binary = []
+        #creates the 8 bit representation of the network
+        for i in nsplit:
+            binary.append((bin(int(i)).replace('0b',"")).zfill(8))
+
+        res = "".join(binary)
+        resstring = ""
+        #then we have a 32 bit number here, then we iterate through and take only the that can work
+        #find some way to generate the number for the netmask
+        for x in range(netmask):
+            resstring += (res[x])
+            #then this generates the specific prefix with the netmask
+        str1 = resstring.zfill(32)
+        #this then padds back the string into the 32 bit representation to be able to be grouped into the groups of 8
+        #example
+        N = 8
+        sublist = [str1[n:n+ N] for n in range(0, len(str1), N)]
+        list2 = []
+        for i in sublist:
+            val = int(i,2)
+            if(val != 0):
+                list2.append(str(val))
+
+        prefix = ".".join(list2)        
+        return prefix      
+         
 
     def longestPrefixMatch(self, LoNs, dest): 
         LoD = dest.split(".")
@@ -190,6 +259,9 @@ class Router:
 
         self.fowardTable.add_entries(srcif, msg['msg'])
 
+        print("this is the relations array " + str(self.relations))
+        print("this is what the list of neighbors array has " + str(self.LoN))
+
         if self.relations[srcif] == 'cust':
             for n in self.LoN: 
                 if n != srcif:
@@ -204,7 +276,24 @@ class Router:
                         "type": msg['type']
                     }
                      
-                    self.send(n, json.dumps(msgCopy))   
+                    self.send(n, json.dumps(msgCopy))
+
+        #probably something kinda like this for peering            
+        if self.relations[srcif] == 'peer' or self.relations[srcif] == 'prov':
+            for n in self.LoN:
+                if self.relations[n] == 'cust':
+
+                    msgCopy = {
+                        "msg":  {
+                            "netmask" : msg["msg"]["netmask"],
+                            "ASPath" :  copypath,
+                            "network" : msg["msg"]["network"]
+                        }, 
+                        "src": n[:-1] + '1',
+                        "dst": n,
+                        "type": msg['type']
+                    }
+                    self.send(n, json.dumps(msgCopy))
 
     def dumpTableConfig(self, LoM): 
         LoT = []
@@ -240,6 +329,8 @@ class Router:
         self.send(srcif, jsonFormat )
 
     def dataMsg(self, srcif, msg):
+        #print("this is srcif " + str(srcif))
+        #print("this is the message that should be printed " + str(msg))
         dest = msg['dst']
 
         ip_address = ForwardingTables.getOptimalIP(self.fowardTable, srcif, dest)
@@ -248,10 +339,19 @@ class Router:
             # to check with the selforigin. if all true -> 
             # to check with shortest ASPath. if equal cost -> 
             # to check with origin. Where IGP > EGP > UNK -> 
-            # to check lowest ip 
+            # to check lowest ip
+        #print("this is the ip address" + str(ip_address))   
+        # msg as follows: -> ip of the router src
+        # dst -> to the src of the message 
+        noroutemsg = {"src": "need the ip from the router",
+        "dst": srcif,
+        "type": "no route",
+        "msg": {}}
+
         if ip_address: 
             self.send(ip_address, json.dumps(msg))      
         else: 
+            print("the no route message triggered")
             self.send(srcif, json.dump(""))
     # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
