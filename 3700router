@@ -2,6 +2,8 @@
 
 import argparse, socket, time, json, select, struct, sys, math, copy, re
 
+from yaml import parse
+
 #another test
 class ForwardingTables: 
     def __init__(self):
@@ -28,7 +30,7 @@ class ForwardingTables:
         LoN = self.selfOrigin(LoN)
         LoN = self.asPath(LoN)
         LoN = self.origin(LoN)
-        
+        LoN = self.smallestIp(LoN)
 
         if LoN:
             for k,v in LoN.items(): 
@@ -36,67 +38,88 @@ class ForwardingTables:
         else: 
             return None
 
+    def smallestIp(self, LofNe):
+        LoN = {} 
+        highest_Ip = "255.255.255.255"
+        for k, v in LofNe.items(): 
+           if self.smallerIp(k, highest_Ip): 
+            highest_Ip = k 
 
-    def origin(self, LoNs): 
+        for k, v in LofNe.items():
+            if k == highest_Ip:
+                LoN[k] = v
+                
+        return LoN  
+    
+    def smallerIp(self, k, highest_Ip): 
+        parsed_k = k.split(".")
+        parsed_highest_Ip = highest_Ip.split(".")
+
+        if (parsed_k < parsed_highest_Ip): 
+            return True
+        else: 
+            return False
+
+    def origin(self, LofNe): 
         LoN = {}
         best_origin = "UNK"
 
-        for k, v in LoNs.items(): 
+        for k, v in LofNe.items(): 
             if v['origin'] == "EGP": 
                 best_origin = "EGP"
             elif v['origin'] == "IGP": 
                 best_origin = "IGP"
 
-        for k, v in LoNs.items():
+        for k, v in LofNe.items():
             if v['origin'] == best_origin:
                 LoN[k] = v
         return LoN
 
-    def asPath(self,LoNs):
+    def asPath(self,LofNe):
         LoN = {}
         largest_number = float("inf")
-        for k, v in LoNs.items(): 
+        for k, v in LofNe.items(): 
             if len(v['ASPath']) < largest_number:
                 largest_number = len(v['ASPath'])
             
-        for k ,v in LoNs.items():
+        for k ,v in LofNe.items():
             if len(v['ASPath']) == largest_number:
                 LoN[k] = v
 
         return LoN
 
-    def selfOrigin(self, LoNs):
+    def selfOrigin(self, LofNe):
         LoN = {}
         
-        for k , v in LoNs.items():
+        for k , v in LofNe.items():
             if v['selfOrigin']:
                 LoN[k] = v
         
         if LoN:
             return LoN
         else: 
-            return LoNs
+            return LofNe
 
-    def maxPref(self, LoNs): 
+    def maxPref(self, LofNe): 
         max_pref = float('-inf')
-        routes = {} 
+        LoN = {} 
 
-        for k, v in LoNs.items():
+        for k, v in LofNe.items():
             if v['localpref'] > max_pref:
                 max_pref = v['localpref']
                 
-        for k, v in LoNs.items():
+        for k, v in LofNe.items():
             if v['localpref'] == max_pref:
-                routes[k] = v
+                LoN[k] = v
 
-        return routes
+        return LoN
 
-    def longestPrefixMatch(self, LoNs, dest): 
+    def longestPrefixMatch(self, LofNe, dest): 
         LoD = dest.split(".")
         LoN = {} 
         matchingCounter = float('-inf')
 
-        for k, v in LoNs.items():
+        for k, v in LofNe.items():
             columnsCounter = 0 
             LoNetmask = v['netmask'].split(".")
             LoNetwork = v['network'].split(".")
@@ -110,7 +133,6 @@ class ForwardingTables:
                 d_bits = self.convertToBinary(LoD[IPcolumns])
 
             masked_N = ""
-            consecutiveOnes = self.countConsecutiveOnes(m_bits)
             while (len(masked_N) != 32):
                 b_count = 0 
                 if (n_bits[b_count] == "1" and m_bits[b_count] == "1"):
@@ -279,7 +301,6 @@ class Router:
                         break
                 msg = k.decode('utf-8')
                 self.process_msgReceived(msg, srcif)
-                print("Received message '%s' from %s" % (msg, srcif))
             
         return
 
