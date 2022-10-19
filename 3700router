@@ -1,6 +1,8 @@
 #!/usr/bin/env -S python3 -u
 
 import argparse, socket, time, json, select, struct, sys, math, copy, re
+from hashlib import new
+from typing import List
 
 #another test
 class ForwardingTables: 
@@ -358,7 +360,7 @@ class Router:
                 "msg" : table
             }
         )
-        self.send(srcif, jsonFormat )
+        self.send(srcif, jsonFormat)
 
     def dataMsg(self, srcif, msg):
         #print("this is srcif " + str(srcif))
@@ -389,6 +391,27 @@ class Router:
     def withDrawMsg(self,srcif, msg): 
         self.LoA.append(msg)
         self.fowardTable.remove_entries(srcif, msg)
+        LoNM = []
+
+        for i in range(len(msg['msg'])): 
+            ListofMsg = msg['msg']
+            newJson = {
+                'netmask' : ListofMsg[i]['netmask'],
+                'network' : ListofMsg[i]['network']
+            }
+            LoNM.append(newJson)
+
+        for n in self.LoN: 
+            if n != srcif:
+                msgCopy = {
+                    "msg": LoNM, 
+                    "src": n[:-1] + '1',
+                    "dst": n,
+                    "type": msg['type']
+                }
+                    
+                self.send(n, json.dumps(msgCopy))
+            
 
 
     # Processing the msg and delegate to delegation method
