@@ -2,8 +2,6 @@
 
 import argparse, socket, time, json, select, struct, sys, math, copy, re
 
-from yaml import parse
-
 #another test
 class ForwardingTables: 
     def __init__(self):
@@ -25,18 +23,24 @@ class ForwardingTables:
             if destPrefix == prefNet: 
                 LoN[entry['src']] = entry
 
-        LoN = self.longestPrefixMatch(LoN, dest)
-        LoN = self.maxPref(LoN)
-        LoN = self.selfOrigin(LoN)
-        LoN = self.asPath(LoN)
-        LoN = self.origin(LoN)
-        LoN = self.smallestIp(LoN)
+        LoN = self.eliminatingIp(LoN, dest)
 
         if LoN:
             for k,v in LoN.items(): 
                 return k
         else: 
             return None
+
+    def eliminatingIp(self, LoFNe, dest):
+        LoN = {}
+        LoN = self.longestPrefixMatch(LoFNe, dest)
+        LoN = self.maxPref(LoN)
+        LoN = self.selfOrigin(LoN)
+        LoN = self.asPath(LoN)
+        LoN = self.origin(LoN)
+        LoN = self.smallestIp(LoN)
+
+        return LoN
 
     def smallestIp(self, LofNe):
         LoN = {} 
@@ -48,7 +52,7 @@ class ForwardingTables:
         for k, v in LofNe.items():
             if k == highest_Ip:
                 LoN[k] = v
-                
+
         return LoN  
     
     def smallerIp(self, k, highest_Ip): 
@@ -232,7 +236,7 @@ class Router:
     def dumpTableConfig(self, LoM): 
         LoT = []
         id = 0 
-        for n in reversed(LoM): 
+        for n in LoM: 
             src = n['src']
             format = {
                 "origin" : n['origin'],
