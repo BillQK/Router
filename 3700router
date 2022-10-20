@@ -113,7 +113,9 @@ class ForwardingTables:
                 entry = {"network": k['msg']['network'], "netmask" : k['msg']['netmask']}
                 #print("withdraw table" +str(withdrawnelems))
                 #print("current entry" + str(entry))
-                if(entry not in withdrawnelems):
+                if(entry in withdrawnelems):
+                    pass
+                else:
                    self.add_entries(k['src'], k['msg'])
                    self.aggregation()
                    print("current table:" + str(self.entries)) 
