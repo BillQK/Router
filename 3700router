@@ -78,25 +78,30 @@ class ForwardingTables:
                             #like mutating the acutal varible, not a copy of the variable, so the changes that I make here
                             #it reflects down to the other messages
                             k['netmask'] = self.decrementbits(k['netmask'])
+                            
 
-    #when                         
+    #when                  
+    #192.168.0, 255.255.255.0
+    #192.168.1 255.255.255.0
+    #we aggregated this
+    #192.168.0 255.255.254
 
+    #when we now withdraw 192.168.0.0
+    #our forwarding table still has
+    #192.168.0.0 255.255.254
+    #for some reason ??
 
     def remove_entries(self, srcif, msg, LoA): 
         k = None
         for n in self.entries:
             for m in msg['msg']: 
                 if n['src'] == srcif and n['network'] == m['network'] and n['netmask'] == m['netmask']:
-                   print("our entries source " + str(n['src']))
-                   print("our entries network " + str(m['network']))
-                   print("our entries netmask " + str(n['netmask'])) 
                    k = n
 
         if(k == None):
             print("this method got called")
             self.reconstructtable(LoA)
         else:
-            print("mistakenly removed from wrong list")
             self.entries.remove(k)
 
     def reconstructtable(self, LoA):
@@ -111,7 +116,8 @@ class ForwardingTables:
 
         
         print("withdrawn messages" + str(withdrawnelems))
-
+        #still need to keep track of each withdraw
+        
         for k in LoA:
             if(k['type'] == 'update'):                        
                 #print("current message:" + str(k))
@@ -124,7 +130,8 @@ class ForwardingTables:
                    print("current table:" + str(self.entries)) 
 
 
-        #print("hopefully this works " + str(self.entries))           
+        #print("hopefully this works " + str(self.entries))
+        #expecting to recieve, that means our forwarding table is not cleared yet.           
  
     
     def getOptimalIP(self, srcif, dest):
@@ -243,13 +250,6 @@ class ForwardingTables:
         for k, v in LoNs.items():
             netprefix = self.convertbinary(v['network'], self.findnetmask(v['netmask']))
             desbin = self.binaryconv(dest)
-            print(LoN.items())
-            print(v['network'])
-            print(v['netmask'])
-            print(netprefix)
-
-            print(dest)
-            print(desbin)
             if(desbin.startswith(netprefix)):
                 val = len(netprefix)
                 if(val > largestmatch):
