@@ -2,7 +2,6 @@
 
 import argparse, socket, time, json, select, struct, sys, math, copy, re
 
-
 #another test
 class ForwardingTables: 
     def __init__(self):
@@ -13,21 +12,80 @@ class ForwardingTables:
         self.entries.append(msg)
         self.entries[len(self.entries)-1]['src'] = srcif
 
+    def binaryconv(self, decimal):
+        nsplit = decimal.split(".")
+        binary = []
+        for i in nsplit:
+            binary.append((bin(int(i)).replace('0b',"")).zfill(8)) 
+
+        num = "".join(binary)
+        return num
+
+    def groupip(self, bstr):
+        N = 8
+        sublist = [bstr[n:n+ N] for n in range(0, len(bstr), N)]
+        list2 = []
+        for i in sublist:
+            val = int(i,2)
+            list2.append(str(val))
+
+        value = ".".join(list2)
+        return value
+
+    def bprefix(self, network, netmask):
+        num = self.binaryconv(network)
+        mask = self.findnetmask(netmask)
+        retstr = ""
+        for elem in range(mask):
+            retstr += (num[elem])
+
+        return retstr
+
+    def checkattributes(self, elem1, elem2):
+        if elem1['localpref'] == elem2['localpref']:
+            if elem1['ASPath'] == elem2['ASPath']:
+                if elem1['origin'] == elem2['origin']:
+                    if elem1['selfOrigin'] == elem2['selfOrigin']:
+                        return True
+
+    def determineadj(self, elem1, elem2):
+        binaryelem1 = self.bprefix(elem1['network'], elem1['netmask'])
+        binaryelem2 = self.bprefix(elem2['network'], elem2['netmask'])
+        test = bin(int(binaryelem1, 2) + 1).replace('0b',"")
+        if(test == binaryelem2):
+            return True
+
+    def decrementbits(self, netmask):
+        num = self.binaryconv(netmask)
+        str2 = list(num)
+        netmaskcount = self.findnetmask(netmask)
+        str2[netmaskcount -1] = "0"
+        str2 = "".join(str2)
+        netmask = self.groupip(str2)
+
+        return netmask                 
+
     def aggregation(self):
-        # is it numerically adjacent 
-        # are the peer the same 
-        # have the same attribute\
-        # add 1 to the ip if and compare it to the next
-        pass 
+        for k in self.entries:
+            for v in self.entries:
+                if(self.determineadj(k,v)):
+                    if(k['src'] == v['src']):
+                        if(self.checkattributes(k, v)):
+                            self.entries.remove(v)
+                            k['netmask'] = self.decrementbits(k['netmask'])
+
 
     def remove_entries(self, srcif, msg): 
         k = None
         for n in self.entries:
             for m in msg['msg']: 
                 if n['src'] == srcif and n['network'] == m['network']:
-                   k = n  
-        
-        self.entries.remove(k)
+                   k = n
+
+        if(k == None):
+            print("made it here")
+        else:
+            self.entries.remove(k)
           
     
     def getOptimalIP(self, srcif, dest):
@@ -35,7 +93,7 @@ class ForwardingTables:
         
         LoN = {}
 
-        for entry in self.entries: 
+        for entry in self.entries:
             prefNet = entry['network']
             prefNet = prefNet[:prefNet.find(".")]
             if destPrefix == prefNet: 
@@ -55,6 +113,7 @@ class ForwardingTables:
     def eliminatingIp(self, LoFNe, dest):
         LoN = {}
         LoN = self.longestPrefixMatch(LoFNe, dest)
+        #print("does prefix match fuck this up " + str(LoN))
         LoN = self.maxPref(LoN)
         LoN = self.selfOrigin(LoN)
         LoN = self.asPath(LoN)
@@ -145,6 +204,8 @@ class ForwardingTables:
         largestmatch = float('-inf')
         for k, v in LoNs.items():
             netprefix = self.convertbinary(v['network'], self.findnetmask(v['netmask']))
+            #print(netprefix)
+            #print(dest)
             if(dest.startswith(netprefix)):
                 val = len(netprefix)
                 if(val > largestmatch):
@@ -189,12 +250,12 @@ class ForwardingTables:
         #find some way to generate the number for the netmask
         for x in range(netmask):
             resstring += (res[x])
-            #then this generates the specific prefix with the netmask
-        str1 = resstring.zfill(32)
-        #this then padds back the string into the 32 bit representation to be able to be grouped into the groups of 8
-        #example
+
+        amt = 32 - netmask
+        for n in range(amt):
+            resstring+='0'
         N = 8
-        sublist = [str1[n:n+ N] for n in range(0, len(str1), N)]
+        sublist = [resstring[n:n+ N] for n in range(0, len(resstring), N)]
         list2 = []
         for i in sublist:
             val = int(i,2)
@@ -246,9 +307,7 @@ class Router:
             copypath.append(i)   
 
         self.fowardTable.add_entries(srcif, msg['msg'])
-        self.fowardTable.aggregration() 
-        print("this is the relations array " + str(self.relations))
-        print("this is what the list of neighbors array has " + str(self.LoN))
+        self.fowardTable.aggregation() 
 
         if self.relations[srcif] == 'cust':
             for n in self.LoN: 
@@ -316,6 +375,8 @@ class Router:
         dest = msg['dst']
         
         ip_address = ForwardingTables.getOptimalIP(self.fowardTable, srcif, dest)
+
+        print("this is the ip address we found " + str(ip_address))
     
         noroutemsg = {
                     "src": srcif[:-1] + "1",
@@ -336,6 +397,7 @@ class Router:
 
     def withDrawMsg(self,srcif, msg): 
         self.LoA.append(msg)
+        print(self.LoA)
         self.fowardTable.remove_entries(srcif, msg)
         LoNM = []
 

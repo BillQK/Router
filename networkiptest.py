@@ -15,12 +15,133 @@ testdict1 = {'192.168.12.2': {'network': '192.168.12.0', 'netmask': '255.255.255
 '192.168.0.1' : {'network' : '192.168.0.0' ,'netmask': '255.255.0.0' },
 '192.0.0.2' : {'network' : '192.0.0.2', 'netmask': '255.0.0.0'}}
 
-testdest = '192.169.0.25'
+testdict2 = {'192.168.0.2': {'network': '192.168.12.0', 'netmask': '255.255.254.0'}, 
+'172.168.0.2' : {'network' : '172.169.0.0', 'netmask': '255.255.0.0'}}
+
+testdest = '192.168.12.25'
+
+testlist = [{'network': '192.168.0.0', 'netmask': '255.255.255.0', 'src': '192.168.0.2'},
+             {'network': '192.168.1.0', 'netmask': '255.255.255.0', 'src': '192.168.0.2'},
+             {'network': '192.168.2.0', 'netmask': '255.255.255.0', 'src': '192.168.0.2'},
+             {'network': '192.168.3.0', 'netmask': '255.255.255.0', 'src': '192.168.0.2'}, 
+             {'network': '172.169.0.0', 'netmask': '255.255.0.0', 'src': '172.168.0.2'}]
+
+
+
+def binaryrepresentation(decimal):
+    nsplit = decimal.split(".")
+    binary = []
+    for i in nsplit:
+        binary.append((bin(int(i)).replace('0b',"")).zfill(8)) 
+
+    num = "".join(binary)
+    return num    
+
+def groupip(bstr):
+    N = 8
+    sublist = [bstr[n:n+ N] for n in range(0, len(bstr), N)]
+    list2 = []
+    for i in sublist:
+        val = int(i,2)
+        list2.append(str(val))
+
+    value = ".".join(list2)
+    return value
+
+def findnetmask(netmask):
+    count = 0
+    num = binaryrepresentation(netmask)
+    for i in num:
+        if i == '1':
+            count += 1
+
+    return count
+
+def bprefix(network, netmask):
+    num = binaryrepresentation(network)  
+    counter = findnetmask(netmask)   
+    retstr = ""
+    for elem in range(counter):
+        retstr += (num[elem])
+    
+    return retstr    
+
+def determineadj(elem1, elem2):
+    binaryelem1 = bprefix(elem1['network'], elem1['netmask'])
+    binaryelem2 = bprefix(elem2['network'], elem2['netmask'])
+    test = bin(int(binaryelem1, 2) + 1).replace('0b',"")
+    if(test == binaryelem2):
+        return True
+
+def checkattributes(elem1, elem2):
+    #this should be pretty straighforward and statements
+    return True        
+
+def decreasebits(netmask):
+    num = binaryrepresentation(netmask)   
+    str2 = list(num)
+    netmaskcount = findnetmask(netmask)   
+    str2[netmaskcount - 1] = '0'
+    str2 = "".join(str2) 
+    netmask = groupip(str2)       
+
+    return netmask   
+
+#this aggregates one at a time, it wouldn't update when one aggregation leads to another.
+def testaggregation(loE):
+    #maybe there is a better way to do this loop so that it does not repeat each character multiple times, but i am lazy
+    for k in loE:
+        for v in loE:
+            if(determineadj(k,v)):
+                if(k['src'] == v['src']):
+                    if(checkattributes(k,v)):
+                        #maybe do this, not sure if it ruins the structure, but it should go one at a time...
+                        loE.remove(v) 
+                        k['netmask'] = decreasebits(k['netmask'])                 
+
+    print(loE)                    
+
+
+testaggregation(testlist)
+
+
+#probably the most convoluted way to generate the prefix of a string...
+def convertbinary(network, netmask):
+    nsplit = network.split('.')
+    binary = []
+    for i in nsplit:
+        binary.append((bin(int(i)).replace('0b',"")).zfill(8))
+
+    res = "".join(binary)
+    resstring = ""
+    for x in range(netmask):
+        resstring += (res[x])
+
+    amt = 32 - netmask    
+    for n in range(amt):
+        resstring+= "0"
+
+    print(amt)  
+    #str1 = resstring.zfill(32)
+    #print(str1)   
+    N = 8
+    sublist = [resstring[n:n+ N] for n in range(0, len(resstring), N)]
+    list2 = []
+    for i in sublist:
+        val = int(i,2)
+        if(val != 0):
+            list2.append(str(val))
+
+    prefix = ".".join(list2)        
+    return prefix      
+
 def testfunc(lofdict, dest):
     LoN  = {}
     largestmatch = float('-inf')
     for k, v in lofdict.items():
+
         netprefix = convertbinary(v['network'], findnetmask(v['netmask']))
+        print(netprefix)
         if(dest.startswith(netprefix)):
             val = len(netprefix)
             if val > largestmatch:
@@ -31,62 +152,9 @@ def testfunc(lofdict, dest):
         if(len(netprefix) == largestmatch):
             LoN[k] = v
 
-    return LoN        
+    return LoN  
 
-
-
-
-def findnetmask(netmask):
-    count = 0
-    nsplit = netmask.split('.')
-    binary = []
-    for i in nsplit:
-        binary.append((bin(int(i)).replace('0b',"")).zfill(8))  
-
-    num = "".join(binary)
-    for i in num:
-        if i == '1':
-            count += 1
-
-    return count
-
-findnetmask('255.255.0.0')
-   
-
-
-#probably the most convoluted way to generate the prefix of a string...
-def convertbinary(network, netmask):
-    #this is to split it up, and then calculate each deciman version of the binary string, 
-    # then evetually fill it to be what we need
-    nsplit = network.split('.')
-    binary = []
-    #creates the 8 bit representation of the network
-    for i in nsplit:
-        binary.append((bin(int(i)).replace('0b',"")).zfill(8))
-
-    res = "".join(binary)
-    resstring = ""
-    #then we have a 32 bit number here, then we iterate through and take only the that can work
-    #find some way to generate the number for the netmask
-    for x in range(netmask):
-        resstring += (res[x])
-        #then this generates the specific prefix with the netmask
-    str1 = resstring.zfill(32)
-    #this then padds back the string into the 32 bit representation to be able to be grouped into the groups of 8
-    #example
-    N = 8
-    sublist = [str1[n:n+ N] for n in range(0, len(str1), N)]
-    list2 = []
-    for i in sublist:
-        val = int(i,2)
-        if(val != 0):
-            list2.append(str(val))
-
-    prefix = ".".join(list2)        
-    return prefix      
-
-
-print(testfunc(testdict1, testdest))
+print(testfunc(testdict2 , testdest))
 
 
 #goal, take network apply the netmask, and then get a prefix, and then check which one is the most specific
