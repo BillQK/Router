@@ -72,21 +72,55 @@ class ForwardingTables:
                     if(k['src'] == v['src']):
                         if(self.checkattributes(k, v)):
                             self.entries.remove(v)
+                            #its definetly has to deal with this, but why does it even get here???
+                            #like mutating the acutal varible, not a copy of the variable, so the changes that I make here
+                            #it reflects down to the other messages
                             k['netmask'] = self.decrementbits(k['netmask'])
 
 
-    def remove_entries(self, srcif, msg): 
+    def remove_entries(self, srcif, msg, LoA): 
         k = None
         for n in self.entries:
             for m in msg['msg']: 
-                if n['src'] == srcif and n['network'] == m['network']:
+                if n['src'] == srcif and n['network'] == m['network'] and n['netmask'] == m['netmask']:
+                   print("our entries source " + str(n['src']))
+                   print("our entries network " + str(m['network']))
+                   print("our entries netmask " + str(n['netmask'])) 
                    k = n
 
         if(k == None):
-            print("made it here")
+            print("this method got called")
+            self.reconstructtable(LoA)
         else:
+            print("mistakenly removed from wrong list")
             self.entries.remove(k)
-          
+
+    def reconstructtable(self, LoA):
+        self.entries.clear()
+        withdrawnelems = []
+        for n in LoA:
+            if(n["type"] == 'withdraw'):
+                LoM = n['msg']
+                for m in LoM:
+                    withdrawnelems.append(m)
+
+        
+        print("withdrawn messages" + str(withdrawnelems))
+
+        for k in LoA:
+            if(k['type'] == 'update'):                        
+                #print("current message:" + str(k))
+                entry = {"network": k['msg']['network'], "netmask" : k['msg']['netmask']}
+                #print("withdraw table" +str(withdrawnelems))
+                #print("current entry" + str(entry))
+                if(entry not in withdrawnelems):
+                   self.add_entries(k['src'], k['msg'])
+                   self.aggregation()
+                   print("current table:" + str(self.entries)) 
+
+
+        #print("hopefully this works " + str(self.entries))           
+ 
     
     def getOptimalIP(self, srcif, dest):
         destPrefix = dest[:dest.find(".")]
@@ -113,13 +147,12 @@ class ForwardingTables:
     def eliminatingIp(self, LoFNe, dest):
         LoN = {}
         LoN = self.longestPrefixMatch(LoFNe, dest)
-        #print("does prefix match fuck this up " + str(LoN))
+        print("this is after longest matching prefix" + str(LoN))
         LoN = self.maxPref(LoN)
         LoN = self.selfOrigin(LoN)
         LoN = self.asPath(LoN)
         LoN = self.origin(LoN)
         LoN = self.smallestIp(LoN)
-
 
         return LoN
 
@@ -205,6 +238,13 @@ class ForwardingTables:
         for k, v in LoNs.items():
             netprefix = self.convertbinary(v['network'], self.findnetmask(v['netmask']))
             desbin = self.binaryconv(dest)
+            print(LoN.items())
+            print(v['network'])
+            print(v['netmask'])
+            print(netprefix)
+
+            print(dest)
+            print(desbin)
             if(desbin.startswith(netprefix)):
                 val = len(netprefix)
                 if(val > largestmatch):
@@ -287,13 +327,15 @@ class Router:
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
 
     # Update MSG and foward announcement 
-    def updateMSG(self, srcif, msg): 
+    def updateMSG(self, srcif, msg):
+        msgcopy = copy.deepcopy(msg)
         self.LoA.append(msg)
+        print("current annoucement cache" + str(self.LoA))
         copypath = [self.asn]
         for i in msg["msg"]['ASPath']:
             copypath.append(i)   
 
-        self.fowardTable.add_entries(srcif, msg['msg'])
+        self.fowardTable.add_entries(srcif, msgcopy['msg'])
         self.fowardTable.aggregation() 
 
         if self.relations[srcif] == 'cust':
@@ -363,7 +405,7 @@ class Router:
         
         ip_address = ForwardingTables.getOptimalIP(self.fowardTable, srcif, dest)
 
-        print("this is the ip address we found " + str(ip_address))
+        #print("this is the ip address we found " + str(ip_address))
     
         noroutemsg = {
                     "src": srcif[:-1] + "1",
@@ -384,8 +426,7 @@ class Router:
 
     def withDrawMsg(self,srcif, msg): 
         self.LoA.append(msg)
-        print(self.LoA)
-        self.fowardTable.remove_entries(srcif, msg)
+        self.fowardTable.remove_entries(srcif, msg, self.LoA)
         LoNM = []
 
         for i in range(len(msg['msg'])): 
@@ -410,9 +451,10 @@ class Router:
 
     # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
-        data = json.loads(msg); 
+        data = json.loads(msg) 
 
-        if (data["type"] == 'update'): 
+        if (data["type"] == 'update'):
+            print("before we parsed into update message list:" + str(data)) 
             self.updateMSG(srcif, data)
         
         if (data["type"] == 'data'): 

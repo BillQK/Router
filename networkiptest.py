@@ -15,11 +15,17 @@ testdict1 = {'192.168.12.2': {'network': '192.168.12.0', 'netmask': '255.255.255
 '192.168.0.1' : {'network' : '192.168.0.0' ,'netmask': '255.255.0.0' },
 '192.0.0.2' : {'network' : '192.0.0.2', 'netmask': '255.0.0.0'}}
 
-testdict2 = {'192.168.2.0': {'network': '192.168.2.0', 'netmask': '255.255.254.0'}, 
-'172.168.0.2' : {'network' : '172.169.0.0', 'netmask': '255.255.0.0'}}
+testdict2 = {'192.168.2.0': {'network': '192.168.0.0', 'netmask': '255.255.254.0'}, 
+'172.168.0.2' : {'network' : '192.168.3.0', 'netmask': '255.255.255.0'}}
 #actually don't have bitwise logic for these entries so it falsely says that there is no route when there should be...
 
-testdest = '192.168.3.25'
+#use 0, 1, 3
+
+testdict3 = [{'network': '192.168.0.0', 'netmask': '255.255.255.0'},
+            {'network': '192.168.1.0', 'netmask': '255.255.255.0'}]
+
+test = {'network': '192.168.0.0', 'netmask': '255.255.255.0'}
+          
 
 testlist = [{'network': '192.168.0.0', 'netmask': '255.255.255.0', 'src': '192.168.0.2'},
              {'network': '192.168.1.0', 'netmask': '255.255.255.0', 'src': '192.168.0.2'},
@@ -28,6 +34,16 @@ testlist = [{'network': '192.168.0.0', 'netmask': '255.255.255.0', 'src': '192.1
              {'network': '172.169.0.0', 'netmask': '255.255.0.0', 'src': '172.168.0.2'}]
 
 
+#have a list of annoucements
+#so after we recieve a withdraw messsage that does not match a current entry in the list
+#clear out all of our entries
+#then with each entry in our list of announcements
+#if update:
+#add back to the array like normal, then aggregate with each update
+#then check after we aggregated if we have created a matching revoked entry/have it
+#if so then remove it
+#if withdraw:
+#store within a list of revoked paths, and don't add it back to our path
 
 def binaryrepresentation(decimal):
     nsplit = decimal.split(".")
@@ -145,13 +161,7 @@ def testfunc(lofdict, dest):
 
         netprefix = convertbinary(v['network'], findnetmask(v['netmask']))
         check = binaryrepresentation(dest)
-        #print(str(v) + " " + str(netprefix))
-        #print(dest + " " + check)
-        #print(netprefix in dest)
 
-        print(netprefix)
-        print(binaryrepresentation(v['network']))
-        print(check)
         if(check.startswith(netprefix)):
             val = len(netprefix)
             if val > largestmatch:
@@ -164,6 +174,8 @@ def testfunc(lofdict, dest):
 
     return LoN  
 
+#do with 1, 0, 3
+testdest = '192.168.3.25'
 print(testfunc(testdict2 , testdest))
 
 
