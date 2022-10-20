@@ -204,9 +204,8 @@ class ForwardingTables:
         largestmatch = float('-inf')
         for k, v in LoNs.items():
             netprefix = self.convertbinary(v['network'], self.findnetmask(v['netmask']))
-            #print(netprefix)
-            #print(dest)
-            if(dest.startswith(netprefix)):
+            desbin = self.binaryconv(dest)
+            if(desbin.startswith(netprefix)):
                 val = len(netprefix)
                 if(val > largestmatch):
                     largestmatch = val
@@ -250,20 +249,8 @@ class ForwardingTables:
         #find some way to generate the number for the netmask
         for x in range(netmask):
             resstring += (res[x])
-
-        amt = 32 - netmask
-        for n in range(amt):
-            resstring+='0'
-        N = 8
-        sublist = [resstring[n:n+ N] for n in range(0, len(resstring), N)]
-        list2 = []
-        for i in sublist:
-            val = int(i,2)
-            if(val != 0):
-                list2.append(str(val))
-
-        prefix = ".".join(list2)        
-        return prefix      
+     
+        return resstring    
          
 class Router:
 

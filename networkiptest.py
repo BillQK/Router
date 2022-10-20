@@ -15,10 +15,11 @@ testdict1 = {'192.168.12.2': {'network': '192.168.12.0', 'netmask': '255.255.255
 '192.168.0.1' : {'network' : '192.168.0.0' ,'netmask': '255.255.0.0' },
 '192.0.0.2' : {'network' : '192.0.0.2', 'netmask': '255.0.0.0'}}
 
-testdict2 = {'192.168.0.2': {'network': '192.168.12.0', 'netmask': '255.255.254.0'}, 
+testdict2 = {'192.168.2.0': {'network': '192.168.2.0', 'netmask': '255.255.254.0'}, 
 '172.168.0.2' : {'network' : '172.169.0.0', 'netmask': '255.255.0.0'}}
+#actually don't have bitwise logic for these entries so it falsely says that there is no route when there should be...
 
-testdest = '192.168.12.25'
+testdest = '192.168.3.25'
 
 testlist = [{'network': '192.168.0.0', 'netmask': '255.255.255.0', 'src': '192.168.0.2'},
              {'network': '192.168.1.0', 'netmask': '255.255.255.0', 'src': '192.168.0.2'},
@@ -102,7 +103,7 @@ def testaggregation(loE):
     print(loE)                    
 
 
-testaggregation(testlist)
+#testaggregation(testlist)
 
 
 #probably the most convoluted way to generate the prefix of a string...
@@ -117,23 +118,25 @@ def convertbinary(network, netmask):
     for x in range(netmask):
         resstring += (res[x])
 
-    amt = 32 - netmask    
-    for n in range(amt):
-        resstring+= "0"
+    return resstring    
 
-    print(amt)  
+    #amt = 32 - netmask    
+    #for n in range(amt):
+    #    resstring+= "0"
+
+    #resstring, is the toal 8 bit   
     #str1 = resstring.zfill(32)
     #print(str1)   
-    N = 8
-    sublist = [resstring[n:n+ N] for n in range(0, len(resstring), N)]
-    list2 = []
-    for i in sublist:
-        val = int(i,2)
-        if(val != 0):
-            list2.append(str(val))
+    #N = 8
+    #sublist = [resstring[n:n+ N] for n in range(0, len(resstring), N)]
+    #list2 = []
+    #for i in sublist:
+    #    val = int(i,2)
+    #    if(val != 0):
+    #        list2.append(str(val))
 
-    prefix = ".".join(list2)        
-    return prefix      
+    #prefix = ".".join(list2)        
+    #return prefix      
 
 def testfunc(lofdict, dest):
     LoN  = {}
@@ -141,8 +144,15 @@ def testfunc(lofdict, dest):
     for k, v in lofdict.items():
 
         netprefix = convertbinary(v['network'], findnetmask(v['netmask']))
+        check = binaryrepresentation(dest)
+        #print(str(v) + " " + str(netprefix))
+        #print(dest + " " + check)
+        #print(netprefix in dest)
+
         print(netprefix)
-        if(dest.startswith(netprefix)):
+        print(binaryrepresentation(v['network']))
+        print(check)
+        if(check.startswith(netprefix)):
             val = len(netprefix)
             if val > largestmatch:
                 largestmatch = val
