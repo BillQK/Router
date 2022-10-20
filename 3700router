@@ -360,6 +360,7 @@ class Router:
         self.send(srcif, jsonFormat )
 
     def dataMsg(self, srcif, msg):
+        print("this is srcif " + str(srcif))
         #print("this is srcif " + str(srcif))
         #print("this is the message that should be printed " + str(msg))
         dest = msg['dst']
