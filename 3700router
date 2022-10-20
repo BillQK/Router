@@ -1,8 +1,7 @@
 #!/usr/bin/env -S python3 -u
 
 import argparse, socket, time, json, select, struct, sys, math, copy, re
-from hashlib import new
-from typing import List
+
 
 #another test
 class ForwardingTables: 
@@ -13,6 +12,13 @@ class ForwardingTables:
     def add_entries(self, srcif, msg): 
         self.entries.append(msg)
         self.entries[len(self.entries)-1]['src'] = srcif
+
+    def aggregation(self):
+        # is it numerically adjacent 
+        # are the peer the same 
+        # have the same attribute\
+        # add 1 to the ip if and compare it to the next
+        pass 
 
     def remove_entries(self, srcif, msg): 
         k = None
@@ -48,12 +54,13 @@ class ForwardingTables:
 
     def eliminatingIp(self, LoFNe, dest):
         LoN = {}
-        LoN = self.testlongestPrefixMatch(LoFNe, dest)
+        LoN = self.longestPrefixMatch(LoFNe, dest)
         LoN = self.maxPref(LoN)
         LoN = self.selfOrigin(LoN)
         LoN = self.asPath(LoN)
         LoN = self.origin(LoN)
         LoN = self.smallestIp(LoN)
+
 
         return LoN
 
@@ -133,7 +140,7 @@ class ForwardingTables:
 
         return LoN
 
-    def testlongestPrefixMatch(self, LoNs, dest):
+    def longestPrefixMatch(self, LoNs, dest):
         LoN = {}
         largestmatch = float('-inf')
         for k, v in LoNs.items():
@@ -197,63 +204,6 @@ class ForwardingTables:
         prefix = ".".join(list2)        
         return prefix      
          
-
-    # def longestPrefixMatch(self, LoNs, dest):  
-    #     LoD = dest.split(".")
-    #     LoN = {} 
-    #     matchingCounter = float('-inf')
-
-    #     for k, v in LofNe.items():
-    #         columnsCounter = 0 
-    #         LoNetmask = v['netmask'].split(".")
-    #         LoNetwork = v['network'].split(".")
-    #         m_bits = None
-    #         d_bits = None
-    #         n_bits = None
-        
-    #         for IPcolumns in range(4):
-    #             n_bits = self.convertToBinary(LoNetwork[IPcolumns])
-    #             m_bits = self.convertToBinary(LoNetmask[IPcolumns])
-    #             d_bits = self.convertToBinary(LoD[IPcolumns])
-
-    #         masked_N = ""
-    #         while (len(masked_N) != 32):
-    #             b_count = 0 
-    #             if (n_bits[b_count] == "1" and m_bits[b_count] == "1"):
-    #                 masked_N += "1"
-    #                 b_count += 1
-    #             else: 
-    #                 masked_N += "0"
-    #                 b_count += 1
-
-    #         for a in range(len(masked_N)): 
-    #             if masked_N[a] == d_bits[a]: 
-    #                 columnsCounter += 1
-    #             else: 
-    #                 break
-    #         if columnsCounter >= matchingCounter: 
-    #             matchingCounter = columnsCounter
-    #             LoN[k] = v
-    
-    #     return LoN
-
-
-    def convertToBinary(self, ip):
-        return format(int(ip), "b")
-
-    #returns the count of a given netmask in ones to know how much to index by    
-    def countConsecutiveOnes(self, bnetmask):
-        count = 0
-        for i in bnetmask:
-            if(i == 1):
-                count +=1
-            else: 
-                break 
-        return count 
-                  
- 
-
-#this is another test to check
 class Router:
 
     relations = {}
@@ -296,7 +246,7 @@ class Router:
             copypath.append(i)   
 
         self.fowardTable.add_entries(srcif, msg['msg'])
-
+        self.fowardTable.aggregration() 
         print("this is the relations array " + str(self.relations))
         print("this is what the list of neighbors array has " + str(self.LoN))
 
@@ -350,8 +300,6 @@ class Router:
         return LoT
 
     def dumpMsg(self, srcif, msg): 
-        # generate dump message in correct format
-        # Todo: Make aggregation in forwarding table
         LoM = self.fowardTable.entries
         table = self.dumpTableConfig(LoM) 
         jsonFormat = json.dumps(
@@ -365,31 +313,26 @@ class Router:
         self.send(srcif, jsonFormat)
 
     def dataMsg(self, srcif, msg):
-        #print("this is srcif " + str(srcif))
-        #print("this is the message that should be printed " + str(msg))
         dest = msg['dst']
-
+        
         ip_address = ForwardingTables.getOptimalIP(self.fowardTable, srcif, dest)
-            # to check with the longest prefix if have multiple prefix matches -> 
-            # to check with the localpref. if localpref -> 
-            # to check with the selforigin. if all true -> 
-            # to check with shortest ASPath. if equal cost -> 
-            # to check with origin. Where IGP > EGP > UNK -> 
-            # to check lowest ip
-        #print("this is the ip address" + str(ip_address))   
-        # msg as follows: -> ip of the router src
-        # dst -> to the src of the message 
-        noroutemsg = {"src": "need the ip from the router",
-        "dst": srcif,
-        "type": "no route",
-        "msg": {}}
+    
+        noroutemsg = {
+                    "src": srcif[:-1] + "1",
+                    "dst": srcif,
+                    "type": "no route",
+                    "msg": {}
+                    }
 
-        print("this is what the ipaddress var is " + str(ip_address))
         if ip_address: 
-            self.send(ip_address, json.dumps(msg))      
+            relsrc = self.relations[srcif]
+            reldst = self.relations[ip_address]
+            if  relsrc == 'cust' or reldst == "cust" :
+                self.send(ip_address, json.dumps(msg))   
+            else: 
+                self.send(srcif, json.dumps(noroutemsg))   
         else: 
-            print("the no route message triggered")
-            self.send(srcif, json.dump(""))
+            self.send(srcif, json.dumps(noroutemsg))
 
     def withDrawMsg(self,srcif, msg): 
         self.LoA.append(msg)
@@ -416,7 +359,6 @@ class Router:
                 self.send(n, json.dumps(msgCopy))
             
 
-
     # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
         data = json.loads(msg); 
@@ -432,6 +374,7 @@ class Router:
 
         if (data["type"] == "withdraw"): 
             self.withDrawMsg(srcif, data)
+
 
     def run(self):
         while True:
