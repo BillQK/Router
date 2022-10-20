@@ -36,6 +36,8 @@ class ForwardingTables:
         num = self.binaryconv(network)
         mask = self.findnetmask(netmask)
         retstr = ""
+        if(mask == 0):
+            return "0"
         for elem in range(mask):
             retstr += (num[elem])
 
@@ -77,6 +79,8 @@ class ForwardingTables:
                             #it reflects down to the other messages
                             k['netmask'] = self.decrementbits(k['netmask'])
 
+    #when                         
+
 
     def remove_entries(self, srcif, msg, LoA): 
         k = None
@@ -97,6 +101,7 @@ class ForwardingTables:
 
     def reconstructtable(self, LoA):
         self.entries.clear()
+        print("items in entries list after cleared" + str(self.entries))
         withdrawnelems = []
         for n in LoA:
             if(n["type"] == 'withdraw'):
@@ -330,14 +335,27 @@ class Router:
 
     # Update MSG and foward announcement 
     def updateMSG(self, srcif, msg):
-        msgcopy = copy.deepcopy(msg)
-        self.LoA.append(msg)
+        msgcopy = {"src" : msg['src'],
+                    "dst" : msg["dst"],
+                    "type" : "update",
+                    "msg" : 
+                    {
+                        'network': msg['msg']['network'],
+                        'netmask': msg['msg']['netmask'],
+                        'localpref': msg['msg']['localpref'],
+                        'selfOrigin': msg['msg']['selfOrigin'],
+                        'ASPath': msg['msg']['ASPath'],
+                        'origin': msg['msg']['origin'],
+                    }
+                    }
+
+        self.LoA.append(msgcopy)
         print("current annoucement cache" + str(self.LoA))
         copypath = [self.asn]
         for i in msg["msg"]['ASPath']:
             copypath.append(i)   
 
-        self.fowardTable.add_entries(srcif, msgcopy['msg'])
+        self.fowardTable.add_entries(srcif, msg['msg'])
         self.fowardTable.aggregation() 
 
         if self.relations[srcif] == 'cust':

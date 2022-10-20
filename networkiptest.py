@@ -86,6 +86,8 @@ def bprefix(network, netmask):
 def determineadj(elem1, elem2):
     binaryelem1 = bprefix(elem1['network'], elem1['netmask'])
     binaryelem2 = bprefix(elem2['network'], elem2['netmask'])
+    if(binaryelem1 == ""):
+         binaryelem1 = '0'
     test = bin(int(binaryelem1, 2) + 1).replace('0b',"")
     if(test == binaryelem2):
         return True
