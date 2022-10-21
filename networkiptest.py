@@ -88,6 +88,7 @@ def determineadj(elem1, elem2):
     binaryelem2 = bprefix(elem2['network'], elem2['netmask'])
     if(binaryelem1 == ""):
          binaryelem1 = '0'
+
     test = bin(int(binaryelem1, 2) + 1).replace('0b',"")
     if(test == binaryelem2):
         return True
@@ -108,17 +109,28 @@ def decreasebits(netmask):
 
 #this aggregates one at a time, it wouldn't update when one aggregation leads to another.
 def testaggregation(loE):
-    #maybe there is a better way to do this loop so that it does not repeat each character multiple times, but i am lazy
+    aggentry = None
+    nexthop = None
     for k in loE:
         for v in loE:
             if(determineadj(k,v)):
                 if(k['src'] == v['src']):
                     if(checkattributes(k,v)):
                         #maybe do this, not sure if it ruins the structure, but it should go one at a time...
-                        loE.remove(v) 
+                        aggentry = k
+                        nexthop = v
                         k['netmask'] = decreasebits(k['netmask'])                 
 
-    print(loE)                    
+    loE.remove(nexthop)
+    newentry = {"network" : aggentry["network"],
+    "netmask": decreasebits(aggentry["netmask"]),
+    "localpref" : aggentry["localpref"],
+    "ASPath" : aggentry["ASPath"],
+    "origin" : aggentry["origin"],
+    "selfOrigin" : aggentry["selfOrigin"],
+    }
+    loE.remove(aggentry)
+    loE.add(newentry)                    
 
 
 #testaggregation(testlist)
@@ -163,6 +175,8 @@ def testfunc(lofdict, dest):
 
         netprefix = convertbinary(v['network'], findnetmask(v['netmask']))
         check = binaryrepresentation(dest)
+        print(netprefix)
+        print(check)
 
         if(check.startswith(netprefix)):
             val = len(netprefix)
@@ -177,7 +191,7 @@ def testfunc(lofdict, dest):
     return LoN  
 
 #do with 1, 0, 3
-testdest = '192.168.3.25'
+testdest = '192.168.0.25'
 print(testfunc(testdict2 , testdest))
 
 

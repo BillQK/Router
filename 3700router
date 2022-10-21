@@ -68,16 +68,28 @@ class ForwardingTables:
         return netmask                 
 
     def aggregation(self):
+        aggentry = None
+        nexthop = None
         for k in self.entries:
             for v in self.entries:
                 if(self.determineadj(k,v)):
                     if(k['src'] == v['src']):
                         if(self.checkattributes(k, v)):
-                            self.entries.remove(v)
-                            #its definetly has to deal with this, but why does it even get here???
-                            #like mutating the acutal varible, not a copy of the variable, so the changes that I make here
-                            #it reflects down to the other messages
-                            k['netmask'] = self.decrementbits(k['netmask'])
+                            nexthop = v
+                            aggentry = k
+ 
+        if(aggentry):
+            self.entries.remove(nexthop)
+            newentry = {"network" : aggentry["network"],
+            "netmask": self.decrementbits(aggentry["netmask"]),
+            "localpref" : aggentry["localpref"],
+            "ASPath" : aggentry["ASPath"],
+            "origin" : aggentry["origin"],
+            "selfOrigin" : aggentry["selfOrigin"],
+            "src" : aggentry['src']}
+            self.entries.remove(aggentry)
+            self.entries.append(newentry)
+
                             
 
     #when                  
@@ -99,14 +111,12 @@ class ForwardingTables:
                    k = n
 
         if(k == None):
-            print("this method got called")
             self.reconstructtable(LoA)
         else:
             self.entries.remove(k)
 
     def reconstructtable(self, LoA):
         self.entries.clear()
-        print("items in entries list after cleared" + str(self.entries))
         withdrawnelems = []
         for n in LoA:
             if(n["type"] == 'withdraw'):
@@ -120,16 +130,10 @@ class ForwardingTables:
         
         for k in LoA:
             if(k['type'] == 'update'):                        
-                #print("current message:" + str(k))
                 entry = {"network": k['msg']['network'], "netmask" : k['msg']['netmask']}
-                #print("withdraw table" +str(withdrawnelems))
-                #print("current entry" + str(entry))
-                if(entry in withdrawnelems):
-                    pass
-                else:
+                if(entry not in withdrawnelems):
                    self.add_entries(k['src'], k['msg'])
                    self.aggregation()
-                   print("current table:" + str(self.entries)) 
 
 
         #print("hopefully this works " + str(self.entries))
@@ -141,11 +145,17 @@ class ForwardingTables:
         
         LoN = {}
 
+
+        #for entry in self.entries:
+        #    prefNet = entry['network']
+        #    prefNet = prefNet[:prefNet.find(".")]
+        #    print("this is destPrefix:" + destPrefix)
+        #    print("this is prefNet:" + destPrefix)
+        #    if destPrefix == prefNet: 
+        #        LoN[entry['src']] = entry
+
         for entry in self.entries:
-            prefNet = entry['network']
-            prefNet = prefNet[:prefNet.find(".")]
-            if destPrefix == prefNet: 
-                LoN[entry['src']] = entry
+            LoN[entry['src']] = entry
 
         LoN = self.eliminatingIp(LoN, dest)
 
@@ -247,11 +257,15 @@ class ForwardingTables:
         return LoN
 
     def longestPrefixMatch(self, LoNs, dest):
+        print("data being passed in: " + str(LoNs))
         LoN = {}
         largestmatch = float('-inf')
+        print("current entries in the list" + str(self.entries))
         for k, v in LoNs.items():
             netprefix = self.convertbinary(v['network'], self.findnetmask(v['netmask']))
             desbin = self.binaryconv(dest)
+            print(netprefix + str(len(netprefix)))
+            print(desbin)
             if(desbin.startswith(netprefix)):
                 val = len(netprefix)
                 if(val > largestmatch):
@@ -349,13 +363,13 @@ class Router:
                     }
                     }
 
-        self.LoA.append(msgcopy)
+        self.LoA.append(msg)
         print("current annoucement cache" + str(self.LoA))
         copypath = [self.asn]
         for i in msg["msg"]['ASPath']:
             copypath.append(i)   
 
-        self.fowardTable.add_entries(srcif, msg['msg'])
+        self.fowardTable.add_entries(srcif, msgcopy['msg'])
         self.fowardTable.aggregation() 
 
         if self.relations[srcif] == 'cust':
