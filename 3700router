@@ -2,7 +2,7 @@
 
 import argparse, socket, time, json, select, struct, sys, math, copy, re
 
-#another test
+
 class ForwardingTables: 
     def __init__(self):
         self.entries = [] 
@@ -122,14 +122,14 @@ class ForwardingTables:
     
     def getOptimalIP(self, srcif, dest):
         destPrefix = dest[:dest.find(".")]
-        
+    
         LoN = {}
         LoN1 = {}
         for entry in self.entries:
             prefNet = entry['network']
             prefNet = prefNet[:prefNet.find(".")]
             if destPrefix == prefNet:
-                LoN1.setdefault(entry['src'], []).append(entry)
+                LoN1.setdefault(entry['src'], []).append(entry)       
 
         LoN = self.eliminatingIp(LoN1, dest)
 
