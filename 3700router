@@ -111,10 +111,6 @@ class ForwardingTables:
                 LoM = n['msg']
                 for m in LoM:
                     withdrawnelems.append(m)
-
-        
-        print("withdrawn messages" + str(withdrawnelems))
-        #still need to keep track of each withdraw
         
         for k in LoA:
             if(k['type'] == 'update'):                        
@@ -122,11 +118,7 @@ class ForwardingTables:
                 if(entry not in withdrawnelems):
                    self.add_entries(k['src'], k['msg'])
                    self.aggregation()
-
-
-        #print("hopefully this works " + str(self.entries))
-        #expecting to recieve, that means our forwarding table is not cleared yet.           
- 
+          
     
     def getOptimalIP(self, srcif, dest):
         destPrefix = dest[:dest.find(".")]
@@ -134,28 +126,10 @@ class ForwardingTables:
         LoN = {}
         LoN1 = {}
         for entry in self.entries:
-            LoN1.setdefault(entry['src'], []).append(entry)
-
-
-
-        #for entry in self.entries:
-        #    prefNet = entry['network']
-        #    prefNet = prefNet[:prefNet.find(".")]
-        #    print("this is destPrefix:" + destPrefix)
-        #    print("this is prefNet:" + destPrefix)
-        #    if destPrefix == prefNet: 
-        #        LoN[entry['src']] = entry
-        #LoN[ipaddress], entry
-
-        #if two ip addresses have the same src, it overrides it...
-        #{key, value}, src(ip, address)
-        #(ip, network)
-        #ip, ip, ip
-        #ip, share one ip address
-        #192.168.0.2(all three networks forward to same src)
-        #LoN[ip]
-        #the same ip address, it gets overidden
-        #, ip, network
+            prefNet = entry['network']
+            prefNet = prefNet[:prefNet.find(".")]
+            if destPrefix == prefNet:
+                LoN1.setdefault(entry['src'], []).append(entry)
 
         LoN = self.eliminatingIp(LoN1, dest)
 
@@ -258,6 +232,7 @@ class ForwardingTables:
     def longestPrefixMatch(self, LoNs, dest):
         LoN = {}
         largestmatch = float('-inf')
+        print("entries for LoNs" + str(LoNs))
         for k, v in LoNs.items():
             for i in v:
                 netprefix = self.convertbinary(i['network'], self.findnetmask(i['netmask']))
@@ -291,20 +266,14 @@ class ForwardingTables:
         return count
 
 
-     #probably the most convoluted way to generate the prefix of a string...
     def convertbinary(self, network, netmask):
-        #this is to split it up, and then calculate each deciman version of the binary string, 
-        # then evetually fill it to be what we need
         nsplit = network.split('.')
         binary = []
-        #creates the 8 bit representation of the network
         for i in nsplit:
             binary.append((bin(int(i)).replace('0b',"")).zfill(8))
 
         res = "".join(binary)
         resstring = ""
-        #then we have a 32 bit number here, then we iterate through and take only the that can work
-        #find some way to generate the number for the netmask
         for x in range(netmask):
             resstring += (res[x])
      
@@ -384,8 +353,7 @@ class Router:
                     }
                      
                     self.send(n, json.dumps(msgCopy))
-
-        #probably something kinda like this for peering            
+           
         elif self.relations[srcif] == 'peer' or self.relations[srcif] == 'prov':
             for n in self.LoN:
                 if self.relations[n] == 'cust':
@@ -435,8 +403,6 @@ class Router:
         dest = msg['dst']
         
         ip_address = ForwardingTables.getOptimalIP(self.fowardTable, srcif, dest)
-
-        #print("this is the ip address we found " + str(ip_address))
     
         noroutemsg = {
                     "src": srcif[:-1] + "1",
@@ -480,7 +446,6 @@ class Router:
                 self.send(n, json.dumps(msgCopy))
             
 
-    # Processing the msg and delegate to delegation method
     def process_msgReceived(self, msg, srcif): 
         data = json.loads(msg) 
 
