@@ -91,18 +91,6 @@ class ForwardingTables:
             self.entries.append(newentry)
 
                             
-
-    #when                  
-    #192.168.0, 255.255.255.0
-    #192.168.1 255.255.255.0
-    #we aggregated this
-    #192.168.0 255.255.254
-
-    #when we now withdraw 192.168.0.0
-    #our forwarding table still has
-    #192.168.0.0 255.255.254
-    #for some reason ??
-
     def remove_entries(self, srcif, msg, LoA): 
         k = None
         for n in self.entries:
@@ -144,6 +132,10 @@ class ForwardingTables:
         destPrefix = dest[:dest.find(".")]
         
         LoN = {}
+        LoN1 = {}
+        for entry in self.entries:
+            LoN1.setdefault(entry['src'], []).append(entry)
+
 
 
         #for entry in self.entries:
@@ -164,12 +156,8 @@ class ForwardingTables:
         #LoN[ip]
         #the same ip address, it gets overidden
         #, ip, network
-        #
-        for entry in self.entries:
-            print(entry)
-            LoN['entry']
 
-        LoN = self.eliminatingIp(LoN, dest)
+        LoN = self.eliminatingIp(LoN1, dest)
 
         if LoN:
             
@@ -183,7 +171,6 @@ class ForwardingTables:
     def eliminatingIp(self, LoFNe, dest):
         LoN = {}
         LoN = self.longestPrefixMatch(LoFNe, dest)
-        print("this is after longest matching prefix" + str(LoN))
         LoN = self.maxPref(LoN)
         LoN = self.selfOrigin(LoN)
         LoN = self.asPath(LoN)
@@ -269,24 +256,22 @@ class ForwardingTables:
         return LoN
 
     def longestPrefixMatch(self, LoNs, dest):
-        print("data being passed in: " + str(LoNs))
         LoN = {}
         largestmatch = float('-inf')
-        print("current entries in the list" + str(self.entries))
         for k, v in LoNs.items():
-            netprefix = self.convertbinary(v['network'], self.findnetmask(v['netmask']))
-            desbin = self.binaryconv(dest)
-            print(netprefix + str(len(netprefix)))
-            print(desbin)
-            if(desbin.startswith(netprefix)):
-                val = len(netprefix)
-                if(val > largestmatch):
-                    largestmatch = val
+            for i in v:
+                netprefix = self.convertbinary(i['network'], self.findnetmask(i['netmask']))
+                desbin = self.binaryconv(dest)
+                if(desbin.startswith(netprefix)):
+                    val = len(netprefix)
+                    if(val > largestmatch):
+                        largestmatch = val
 
         for k, v in LoNs.items():
-            netprefix = self.convertbinary(v['network'], self.findnetmask(v['netmask']))
-            if(len(netprefix) == largestmatch):
-                LoN[k] = v
+            for j in v:
+                netprefix = self.convertbinary(j['network'], self.findnetmask(j['netmask']))
+                if(len(netprefix) == largestmatch):
+                    LoN[k] = j
 
         return LoN                     
 

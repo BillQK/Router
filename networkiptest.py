@@ -15,11 +15,8 @@ testdict1 = {'192.168.12.2': {'network': '192.168.12.0', 'netmask': '255.255.255
 '192.168.0.1' : {'network' : '192.168.0.0' ,'netmask': '255.255.0.0' },
 '192.0.0.2' : {'network' : '192.0.0.2', 'netmask': '255.0.0.0'}}
 
-testdict2 = {'192.168.2.0': {'network': '192.168.0.0', 'netmask': '255.255.254.0'}, 
-'172.168.0.2' : {'network' : '192.168.3.0', 'netmask': '255.255.255.0'}}
 #actually don't have bitwise logic for these entries so it falsely says that there is no route when there should be...
 
-#use 0, 1, 3
 
 testdict3 = [{'network': '192.168.0.0', 'netmask': '255.255.255.0'},
             {'network': '192.168.1.0', 'netmask': '255.255.255.0'}]
@@ -108,7 +105,7 @@ def decreasebits(netmask):
     return netmask   
 
 #this aggregates one at a time, it wouldn't update when one aggregation leads to another.
-def testaggregation(loE):
+def testaggregation(self, loE):
     aggentry = None
     nexthop = None
     for k in loE:
@@ -130,7 +127,7 @@ def testaggregation(loE):
     "selfOrigin" : aggentry["selfOrigin"],
     }
     loE.remove(aggentry)
-    loE.add(newentry)                    
+    loE.append(newentry)                    
 
 
 #testaggregation(testlist)
@@ -168,25 +165,29 @@ def convertbinary(network, netmask):
     #prefix = ".".join(list2)        
     #return prefix      
 
+testdict2 = {'192.168.2.0': [{'network': '192.168.0.0', 'netmask': '255.255.254.0'},
+                            {'network': '192.168.0.0', 'netmask': '255.255.254.0'}], 
+'172.168.0.2' : [{'network' : '192.168.3.0', 'netmask': '255.255.255.0'}]}    
+
 def testfunc(lofdict, dest):
     LoN  = {}
     largestmatch = float('-inf')
     for k, v in lofdict.items():
-
-        netprefix = convertbinary(v['network'], findnetmask(v['netmask']))
-        check = binaryrepresentation(dest)
-        print(netprefix)
-        print(check)
-
-        if(check.startswith(netprefix)):
-            val = len(netprefix)
-            if val > largestmatch:
-                largestmatch = val
+        for i in v:
+            netprefix = convertbinary(i['network'], findnetmask(i['netmask']))
+            check = binaryrepresentation(dest)
+            print(netprefix)
+            print(check)
+            if(check.startswith(netprefix)):
+                val = len(netprefix)
+                if val > largestmatch:
+                    largestmatch = val
 
     for k,v in lofdict.items():
-        netprefix = convertbinary(v['network'], findnetmask(v['netmask']))
-        if(len(netprefix) == largestmatch):
-            LoN[k] = v
+        for j in v:
+            netprefix = convertbinary(j['network'], findnetmask(j['netmask']))
+            if(len(netprefix) == largestmatch):
+                LoN[k] = j
 
     return LoN  
 
@@ -197,7 +198,12 @@ print(testfunc(testdict2 , testdest))
 
 #goal, take network apply the netmask, and then get a prefix, and then check which one is the most specific
 
+testdict4 = {}
 
+for entry in testlist:
+    testdict4.setdefault(entry['src'],[]).append(entry)
+
+print(testdict4)
 
 testdict1.setdefault(network1, [])
 testdict1[network1].append(network4)
