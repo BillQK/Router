@@ -153,9 +153,21 @@ class ForwardingTables:
         #    print("this is prefNet:" + destPrefix)
         #    if destPrefix == prefNet: 
         #        LoN[entry['src']] = entry
+        #LoN[ipaddress], entry
 
+        #if two ip addresses have the same src, it overrides it...
+        #{key, value}, src(ip, address)
+        #(ip, network)
+        #ip, ip, ip
+        #ip, share one ip address
+        #192.168.0.2(all three networks forward to same src)
+        #LoN[ip]
+        #the same ip address, it gets overidden
+        #, ip, network
+        #
         for entry in self.entries:
-            LoN[entry['src']] = entry
+            print(entry)
+            LoN['entry']
 
         LoN = self.eliminatingIp(LoN, dest)
 
