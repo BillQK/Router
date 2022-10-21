@@ -2,16 +2,18 @@
 
 import argparse, socket, time, json, select, struct, sys, math, copy, re
 
-
+#class that reprsents our forwarding table and houses the various functions assocaiated in a typical bgp
+#router forwarding table, such as aggregating, and finding the best ip address to forward to
 class ForwardingTables: 
     def __init__(self):
         self.entries = [] 
         
-    # Add entries 
+    #adds an entry to our foward table 
     def add_entries(self, srcif, msg): 
         self.entries.append(msg)
         self.entries[len(self.entries)-1]['src'] = srcif
 
+    #converts a given dotted decimal number to its binary representation    
     def binaryconv(self, decimal):
         nsplit = decimal.split(".")
         binary = []
@@ -21,6 +23,7 @@ class ForwardingTables:
         num = "".join(binary)
         return num
 
+    #purpopse of grouping a 32 to bit number back into groups of 8    
     def groupip(self, bstr):
         N = 8
         sublist = [bstr[n:n+ N] for n in range(0, len(bstr), N)]
@@ -32,6 +35,7 @@ class ForwardingTables:
         value = ".".join(list2)
         return value
 
+    #creates the binary prefix with a given network and netmask
     def bprefix(self, network, netmask):
         num = self.binaryconv(network)
         mask = self.findnetmask(netmask)
@@ -43,6 +47,7 @@ class ForwardingTables:
 
         return retstr
 
+    #used for aggregation, and checks all the attributes of the given network to see if they are the same    
     def checkattributes(self, elem1, elem2):
         if elem1['localpref'] == elem2['localpref']:
             if elem1['ASPath'] == elem2['ASPath']:
@@ -50,6 +55,7 @@ class ForwardingTables:
                     if elem1['selfOrigin'] == elem2['selfOrigin']:
                         return True
 
+    #used for aggregation, and checks if two given networks, and netmasks are numerically adjacent to one another
     def determineadj(self, elem1, elem2):
         binaryelem1 = self.bprefix(elem1['network'], elem1['netmask'])
         binaryelem2 = self.bprefix(elem2['network'], elem2['netmask'])
@@ -57,6 +63,7 @@ class ForwardingTables:
         if(test == binaryelem2):
             return True
 
+    #used for aggregatino, and decrements a given netmask by one bit 
     def decrementbits(self, netmask):
         num = self.binaryconv(netmask)
         str2 = list(num)
@@ -67,6 +74,9 @@ class ForwardingTables:
 
         return netmask                 
 
+    #handles aggregations, follows the protocol listed: checks if numbers are adjacent numerically,
+    #forward to the same next-hop, and have the same attributes
+    #after determining this requirements, if passes, aggregates the two entries into one in our table
     def aggregation(self):
         aggentry = None
         nexthop = None
@@ -90,7 +100,8 @@ class ForwardingTables:
             self.entries.remove(aggentry)
             self.entries.append(newentry)
 
-                            
+    #used when we have withdraws, it determines if we have the entry already in the list, then it removes that entry
+    #OR progresses down and disaggregate our table with given entry and List of Announcements.                       
     def remove_entries(self, srcif, msg, LoA): 
         k = None
         for n in self.entries:
@@ -102,7 +113,8 @@ class ForwardingTables:
             self.reconstructtable(LoA)
         else:
             self.entries.remove(k)
-
+    #Discards our previous table, and regerates it based on given Announcement messages, if update, we add back into
+    #forwarding table, if withdraw, we do not add, and filter out attempts to add entry to list.
     def reconstructtable(self, LoA):
         self.entries.clear()
         withdrawnelems = []
@@ -119,7 +131,7 @@ class ForwardingTables:
                    self.add_entries(k['src'], k['msg'])
                    self.aggregation()
           
-    
+    #Function for filtering out all tie breaks, and returning a single entry to send a data packet to    
     def getOptimalIP(self, srcif, dest):
         destPrefix = dest[:dest.find(".")]
     
@@ -141,7 +153,7 @@ class ForwardingTables:
                 return k       
         else: 
             return None
-
+    #Function for handling all tie breaks within Destinations
     def eliminatingIp(self, LoFNe, dest):
         LoN = {}
         LoN = self.longestPrefixMatch(LoFNe, dest)
@@ -152,7 +164,7 @@ class ForwardingTables:
         LoN = self.smallestIp(LoN)
 
         return LoN
-
+    #Last tie break, and checks which ip address is the smallest.
     def smallestIp(self, LofNe):
         LoN = {} 
         highest_Ip = "255.255.255.255"
@@ -165,7 +177,7 @@ class ForwardingTables:
                 LoN[k] = v
 
         return LoN  
-    
+    #Helper method for determining which is the smallest ip amongst the given ones    
     def smallerIp(self, k, highest_Ip): 
         parsed_k = k.split(".")
         parsed_highest_Ip = highest_Ip.split(".")
@@ -174,7 +186,7 @@ class ForwardingTables:
             return True
         else: 
             return False
-
+    #Helper method for determining which entry has the best origin
     def origin(self, LofNe): 
         LoN = {}
         best_origin = "UNK"
@@ -189,7 +201,7 @@ class ForwardingTables:
             if v['origin'] == best_origin:
                 LoN[k] = v
         return LoN
-
+    #Helper method for determining which entry has the shortest ASPath
     def asPath(self,LofNe):
         LoN = {}
         largest_number = float("inf")
@@ -202,7 +214,7 @@ class ForwardingTables:
                 LoN[k] = v
 
         return LoN
-
+    #Helper method for determining which entry's selfOrigins are true
     def selfOrigin(self, LofNe):
         LoN = {}
         
@@ -214,7 +226,7 @@ class ForwardingTables:
             return LoN
         else: 
             return LofNe
-
+    #Helper method for determining which entry has the highest localpref        
     def maxPref(self, LofNe): 
         max_pref = float('-inf')
         LoN = {} 
@@ -228,7 +240,8 @@ class ForwardingTables:
                 LoN[k] = v
 
         return LoN
-
+    #Longest Prefix Match, and used as a tie break between networks to determine which is the best network
+    #to forward to
     def longestPrefixMatch(self, LoNs, dest):
         LoN = {}
         largestmatch = float('-inf')
@@ -250,7 +263,7 @@ class ForwardingTables:
 
         return LoN                     
 
-
+    #counts the amount of ones within a decimal netmask
     def findnetmask(self, netmask):
         count = 0
         nsplit = netmask.split('.')
@@ -265,7 +278,7 @@ class ForwardingTables:
 
         return count
 
-
+    #converts to binary for a given decimal network, and decimal netmask
     def convertbinary(self, network, netmask):
         nsplit = network.split('.')
         binary = []
@@ -278,7 +291,8 @@ class ForwardingTables:
             resstring += (res[x])
      
         return resstring    
-         
+
+#BGP Router, and houses the functions for sending and processing data messages from neighboring routers connected        
 class Router:
 
     relations = {}
@@ -313,7 +327,8 @@ class Router:
     def send(self, network, message):
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
 
-    # Update MSG and foward announcement 
+    # Route Update Message, stores the route update messages from neighbors in both forwarding table, and annnouncements
+    # then forwards the messages to correct routers based on the requirements
     def updateMSG(self, srcif, msg):
         msgcopy = {"src" : msg['src'],
                     "dst" : msg["dst"],
@@ -330,7 +345,6 @@ class Router:
                     }
 
         self.LoA.append(msg)
-        print("current annoucement cache" + str(self.LoA))
         copypath = [self.asn]
         for i in msg["msg"]['ASPath']:
             copypath.append(i)   
@@ -368,7 +382,7 @@ class Router:
                         "type": msg['type']
                     }
                     self.send(n, json.dumps(msgCopy))
-
+    #Helper method for creating the correct dump table                
     def dumpTableConfig(self, LoM): 
         LoT = []
         id = 0 
@@ -385,7 +399,7 @@ class Router:
             }
             LoT.append(format)
         return LoT
-
+    #iterates and sends our forwarding table to our neighbors    
     def dumpMsg(self, srcif, msg): 
         LoM = self.fowardTable.entries
         table = self.dumpTableConfig(LoM) 
@@ -399,6 +413,8 @@ class Router:
         )
         self.send(srcif, jsonFormat)
 
+    #Processes data messages, and sends to the correct destination supplied, if there is no destination/ shouuld not forward
+    # sends back a no route    
     def dataMsg(self, srcif, msg):
         dest = msg['dst']
         
@@ -421,6 +437,7 @@ class Router:
         else: 
             self.send(srcif, json.dumps(noroutemsg))
 
+    #Withdraws a route from our forwarding table, and stores that annnouncment in our list of announcement
     def withDrawMsg(self,srcif, msg): 
         self.LoA.append(msg)
         self.fowardTable.remove_entries(srcif, msg, self.LoA)
@@ -445,7 +462,7 @@ class Router:
                     
                 self.send(n, json.dumps(msgCopy))
             
-
+    #processes the message recieved from the sockets, and delegates to the correct function based on the type from the data        
     def process_msgReceived(self, msg, srcif): 
         data = json.loads(msg) 
 
