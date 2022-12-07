@@ -2,112 +2,297 @@
 
 import argparse, socket, time, json, select, struct, sys, math, copy, re
 
-#another test
+#class that reprsents our forwarding table and houses the various functions assocaiated in a typical bgp
+#router forwarding table, such as aggregating, and finding the best ip address to forward to
 class ForwardingTables: 
     def __init__(self):
-        self.entries = []
-        self.testrouting = {}
-
-        #networks/netmasks, then the ips for it, for routing stuff
-        #{172.169, 172.168.0.2}
-        #{12, 192.169.0.2, 10.0.0.2}
-
-        #{192, 192.168}
-        #{172, 172.169}
-        #{12, 12.0.0.25}
-
-        #update
-        #172.168.0.2, connected to router(peer), updated
-        #add this in like a list {172, 172.168.0.2, 172.169.0.1}
-        #when someone sends a message
-        #we want to a send some data to this ip
-        #172.169.0.25 network thats being transmitted
-        #if theres two examples of the entworks
-        #compare and then send data to 172.169.0.1(closer to what its asking for?)
-
-        #10.0.0.2
-        #{10, 10.0.02}
-        #one of the networks being send data is
-        #11.0.0.25
-        #port that don't know
-
-        #192.168.1.25
-        #two networks -> 12.0.0.25, and connected 192.168.
-        #{12.0.0}
-
-        #{network, and the subsequent fields: ips with it}
-
-    # Add entries 
+        self.entries = [] 
+        
+    #adds an entry to our foward table 
     def add_entries(self, srcif, msg): 
         self.entries.append(msg)
+        self.entries[len(self.entries)-1]['src'] = srcif
 
-    def printData(self):
-        for e in self.entries.values(): 
-            print(e)
+    #converts a given dotted decimal number to its binary representation    
+    def binaryconv(self, decimal):
+        nsplit = decimal.split(".")
+        binary = []
+        for i in nsplit:
+            binary.append((bin(int(i)).replace('0b',"")).zfill(8)) 
 
-    def addToRouting(self, msg):
-        routeinfo = []
-        peer = msg["src"]
-        #have a port field in there as well
+        num = "".join(binary)
+        return num
 
-        network = msg["msg"]["network"]
-        netmask = msg['msg']['netmask']
+    #purpopse of grouping a 32 to bit number back into groups of 8    
+    def groupip(self, bstr):
+        N = 8
+        sublist = [bstr[n:n+ N] for n in range(0, len(bstr), N)]
+        list2 = []
+        for i in sublist:
+            val = int(i,2)
+            list2.append(str(val))
 
-        prefixednetwork = self.determinenetwork(network, netmask)
-        self.testrouting.setdefault(prefixednetwork, [])
-        self.testrouting[prefixednetwork].append(peer)
+        value = ".".join(list2)
+        return value
 
-       #subnet mask/bitwise operations, and get the network ip 
-    def determinenetwork(self, network, netmask):
-        test = []
-        pattern = re.compile(r'255')
-        matches = pattern.findall(netmask)
-        network = network.split(".")
+    #creates the binary prefix with a given network and netmask
+    def bprefix(self, network, netmask):
+        num = self.binaryconv(network)
+        mask = self.findnetmask(netmask)
+        retstr = ""
+        if(mask == 0):
+            return "0"
+        for elem in range(mask):
+            retstr += (num[elem])
 
-        for i in range(len(matches)):
-            test.append(network[i])
+        return retstr
 
-        test = '.'.join(test)
+    #used for aggregation, and checks all the attributes of the given network to see if they are the same    
+    def checkattributes(self, elem1, elem2):
+        if elem1['localpref'] == elem2['localpref']:
+            if elem1['ASPath'] == elem2['ASPath']:
+                if elem1['origin'] == elem2['origin']:
+                    if elem1['selfOrigin'] == elem2['selfOrigin']:
+                        return True
 
-        return test
+    #used for aggregation, and checks if two given networks, and netmasks are numerically adjacent to one another
+    def determineadj(self, elem1, elem2):
+        binaryelem1 = self.bprefix(elem1['network'], elem1['netmask'])
+        binaryelem2 = self.bprefix(elem2['network'], elem2['netmask'])
+        test = bin(int(binaryelem1, 2) + 1).replace('0b',"")
+        if(test == binaryelem2):
+            return True
 
+    #used for aggregatino, and decrements a given netmask by one bit 
+    def decrementbits(self, netmask):
+        num = self.binaryconv(netmask)
+        str2 = list(num)
+        netmaskcount = self.findnetmask(netmask)
+        str2[netmaskcount -1] = "0"
+        str2 = "".join(str2)
+        netmask = self.groupip(str2)
 
-    def convertToBinary(self, msg):
-        prefix = msg["network"]
-        netmask = msg["netmask"]
-        
-        #converting to eventually check withe netmask(count the ones)
-        #with the number that has the correct amount depending on the netmask
-        #then thats the address that we send things to?
+        return netmask                 
 
-        separatedecimal = prefix.split(".")
-        print(separatedecimal)
-        nlist = []
-        testlist = []
-
-        for i in separatedecimal:
-            nlist.append(bin(int(i)).replace("0b", ""))
-
-        for i in nlist:
-            testlist.append(i.zfill(8))
-
-        str = '.'.join(testlist)
-        num = self.countOnes(str)  
-
-        print(str)    
-        #index = countOnes(bnetmask)
-        #for index through length, replace that value with 0
-
-    #returns the count of a given netmask in ones to know how much to index by    
-    def countOnes(self, bnetmask):
-        count = 0
-        for i in bnetmask:
-            if(i == 1):
-                count +=1
-                  
+    #handles aggregations, follows the protocol listed: checks if numbers are adjacent numerically,
+    #forward to the same next-hop, and have the same attributes
+    #after determining this requirements, if passes, aggregates the two entries into one in our table
+    def aggregation(self):
+        aggentry = None
+        nexthop = None
+        for k in self.entries:
+            for v in self.entries:
+                if(self.determineadj(k,v)):
+                    if(k['src'] == v['src']):
+                        if(self.checkattributes(k, v)):
+                            nexthop = v
+                            aggentry = k
  
+        if(aggentry):
+            self.entries.remove(nexthop)
+            newentry = {"network" : aggentry["network"],
+            "netmask": self.decrementbits(aggentry["netmask"]),
+            "localpref" : aggentry["localpref"],
+            "ASPath" : aggentry["ASPath"],
+            "origin" : aggentry["origin"],
+            "selfOrigin" : aggentry["selfOrigin"],
+            "src" : aggentry['src']}
+            self.entries.remove(aggentry)
+            self.entries.append(newentry)
 
-#this is another test to check
+    #used when we have withdraws, it determines if we have the entry already in the list, then it removes that entry
+    #OR progresses down and disaggregate our table with given entry and List of Announcements.                       
+    def remove_entries(self, srcif, msg, LoA): 
+        k = None
+        for n in self.entries:
+            for m in msg['msg']: 
+                if n['src'] == srcif and n['network'] == m['network'] and n['netmask'] == m['netmask']:
+                   k = n
+
+        if(k == None):
+            self.reconstructtable(LoA)
+        else:
+            self.entries.remove(k)
+    #Discards our previous table, and regerates it based on given Announcement messages, if update, we add back into
+    #forwarding table, if withdraw, we do not add, and filter out attempts to add entry to list.
+    def reconstructtable(self, LoA):
+        self.entries.clear()
+        withdrawnelems = []
+        for n in LoA:
+            if(n["type"] == 'withdraw'):
+                LoM = n['msg']
+                for m in LoM:
+                    withdrawnelems.append(m)
+        
+        for k in LoA:
+            if(k['type'] == 'update'):                        
+                entry = {"network": k['msg']['network'], "netmask" : k['msg']['netmask']}
+                if(entry not in withdrawnelems):
+                   self.add_entries(k['src'], k['msg'])
+                   self.aggregation()
+          
+    #Function for filtering out all tie breaks, and returning a single entry to send a data packet to    
+    def getOptimalIP(self, srcif, dest):
+        destPrefix = dest[:dest.find(".")]
+    
+        LoN = {}
+        LoN1 = {}
+        for entry in self.entries:
+            prefNet = entry['network']
+            prefNet = prefNet[:prefNet.find(".")]
+            if destPrefix == prefNet:
+                LoN1.setdefault(entry['src'], []).append(entry)       
+
+        LoN = self.eliminatingIp(LoN1, dest)
+
+        if LoN:
+            
+            for k,v in LoN.items():
+                if k is None:
+                    print(srcif + "this is a bad route")
+                return k       
+        else: 
+            return None
+    #Function for handling all tie breaks within Destinations
+    def eliminatingIp(self, LoFNe, dest):
+        LoN = {}
+        LoN = self.longestPrefixMatch(LoFNe, dest)
+        LoN = self.maxPref(LoN)
+        LoN = self.selfOrigin(LoN)
+        LoN = self.asPath(LoN)
+        LoN = self.origin(LoN)
+        LoN = self.smallestIp(LoN)
+
+        return LoN
+    #Last tie break, and checks which ip address is the smallest.
+    def smallestIp(self, LofNe):
+        LoN = {} 
+        highest_Ip = "255.255.255.255"
+        for k, v in LofNe.items(): 
+           if self.smallerIp(k, highest_Ip): 
+            highest_Ip = k 
+
+        for k, v in LofNe.items():
+            if k == highest_Ip:
+                LoN[k] = v
+
+        return LoN  
+    #Helper method for determining which is the smallest ip amongst the given ones    
+    def smallerIp(self, k, highest_Ip): 
+        parsed_k = k.split(".")
+        parsed_highest_Ip = highest_Ip.split(".")
+
+        if (parsed_k < parsed_highest_Ip): 
+            return True
+        else: 
+            return False
+    #Helper method for determining which entry has the best origin
+    def origin(self, LofNe): 
+        LoN = {}
+        best_origin = "UNK"
+
+        for k, v in LofNe.items(): 
+            if v['origin'] == "EGP": 
+                best_origin = "EGP"
+            elif v['origin'] == "IGP": 
+                best_origin = "IGP"
+
+        for k, v in LofNe.items():
+            if v['origin'] == best_origin:
+                LoN[k] = v
+        return LoN
+    #Helper method for determining which entry has the shortest ASPath
+    def asPath(self,LofNe):
+        LoN = {}
+        largest_number = float("inf")
+        for k, v in LofNe.items(): 
+            if len(v['ASPath']) < largest_number:
+                largest_number = len(v['ASPath'])
+            
+        for k ,v in LofNe.items():
+            if len(v['ASPath']) == largest_number:
+                LoN[k] = v
+
+        return LoN
+    #Helper method for determining which entry's selfOrigins are true
+    def selfOrigin(self, LofNe):
+        LoN = {}
+        
+        for k , v in LofNe.items():
+            if v['selfOrigin']:
+                LoN[k] = v
+        
+        if LoN:
+            return LoN
+        else: 
+            return LofNe
+    #Helper method for determining which entry has the highest localpref        
+    def maxPref(self, LofNe): 
+        max_pref = float('-inf')
+        LoN = {} 
+
+        for k, v in LofNe.items():
+            if v['localpref'] > max_pref:
+                max_pref = v['localpref']
+                
+        for k, v in LofNe.items():
+            if v['localpref'] == max_pref:
+                LoN[k] = v
+
+        return LoN
+    #Longest Prefix Match, and used as a tie break between networks to determine which is the best network
+    #to forward to
+    def longestPrefixMatch(self, LoNs, dest):
+        LoN = {}
+        largestmatch = float('-inf')
+        print("entries for LoNs" + str(LoNs))
+        for k, v in LoNs.items():
+            for i in v:
+                netprefix = self.convertbinary(i['network'], self.findnetmask(i['netmask']))
+                desbin = self.binaryconv(dest)
+                if(desbin.startswith(netprefix)):
+                    val = len(netprefix)
+                    if(val > largestmatch):
+                        largestmatch = val
+
+        for k, v in LoNs.items():
+            for j in v:
+                netprefix = self.convertbinary(j['network'], self.findnetmask(j['netmask']))
+                if(len(netprefix) == largestmatch):
+                    LoN[k] = j
+
+        return LoN                     
+
+    #counts the amount of ones within a decimal netmask
+    def findnetmask(self, netmask):
+        count = 0
+        nsplit = netmask.split('.')
+        binary = []
+        for i in nsplit:
+            binary.append((bin(int(i)).replace('0b',"")).zfill(8))  
+
+        num = "".join(binary)
+        for i in num:
+            if i == '1':
+                count += 1
+
+        return count
+
+    #converts to binary for a given decimal network, and decimal netmask
+    def convertbinary(self, network, netmask):
+        nsplit = network.split('.')
+        binary = []
+        for i in nsplit:
+            binary.append((bin(int(i)).replace('0b',"")).zfill(8))
+
+        res = "".join(binary)
+        resstring = ""
+        for x in range(netmask):
+            resstring += (res[x])
+     
+        return resstring    
+
+#BGP Router, and houses the functions for sending and processing data messages from neighboring routers connected        
 class Router:
 
     relations = {}
@@ -127,7 +312,6 @@ class Router:
             port, neighbor, relation = relationship.split("-")
 
             self.LoN.append(neighbor)
-            print(self.LoN)
             self.sockets[neighbor] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sockets[neighbor].bind(('localhost', 0))
             self.ports[neighbor] = int(port)
@@ -143,14 +327,30 @@ class Router:
     def send(self, network, message):
         self.sockets[network].sendto(message.encode('utf-8'), ('localhost', self.ports[network]))
 
-    # Update MSG and foward announcement 
-    def updateMSG(self, srcif, msg): 
-        self.LoA = msg
+    # Route Update Message, stores the route update messages from neighbors in both forwarding table, and annnouncements
+    # then forwards the messages to correct routers based on the requirements
+    def updateMSG(self, srcif, msg):
+        msgcopy = {"src" : msg['src'],
+                    "dst" : msg["dst"],
+                    "type" : "update",
+                    "msg" : 
+                    {
+                        'network': msg['msg']['network'],
+                        'netmask': msg['msg']['netmask'],
+                        'localpref': msg['msg']['localpref'],
+                        'selfOrigin': msg['msg']['selfOrigin'],
+                        'ASPath': msg['msg']['ASPath'],
+                        'origin': msg['msg']['origin'],
+                    }
+                    }
+
+        self.LoA.append(msg)
         copypath = [self.asn]
         for i in msg["msg"]['ASPath']:
             copypath.append(i)   
 
-        self.fowardTable.addToRouting(msg)
+        self.fowardTable.add_entries(srcif, msgcopy['msg'])
+        self.fowardTable.aggregation() 
 
         if self.relations[srcif] == 'cust':
             for n in self.LoN: 
@@ -166,28 +366,41 @@ class Router:
                         "type": msg['type']
                     }
                      
-                    self.send(n, json.dumps(msgCopy))   
-
+                    self.send(n, json.dumps(msgCopy))
+           
+        elif self.relations[srcif] == 'peer' or self.relations[srcif] == 'prov':
+            for n in self.LoN:
+                if self.relations[n] == 'cust':
+                    msgCopy = {
+                        "msg":  {
+                            "netmask" : msg["msg"]["netmask"],
+                            "ASPath" :  copypath,
+                            "network" : msg["msg"]["network"]
+                        }, 
+                        "src": n[:-1] + '1',
+                        "dst": n,
+                        "type": msg['type']
+                    }
+                    self.send(n, json.dumps(msgCopy))
+    #Helper method for creating the correct dump table                
     def dumpTableConfig(self, LoM): 
         LoT = []
         id = 0 
         for n in LoM: 
             src = n['src']
             format = {
-                "origin" : n['msg']['origin'],
-                "localpref" : n['msg']['localpref'], 
-                "network" : n['msg']['network'],
-                "ASPath" : n['msg']['ASPath'],
-                "netmask" : n['msg']['netmask'],
+                "origin" : n['origin'],
+                "localpref" : n['localpref'], 
+                "network" : n['network'],
+                "ASPath" : n['ASPath'],
+                "netmask" : n['netmask'],
                 "peer" : src,
-                "selfOrigin" : n['msg']['selfOrigin']
+                "selfOrigin" : n['selfOrigin']
             }
             LoT.append(format)
         return LoT
-
+    #iterates and sends our forwarding table to our neighbors    
     def dumpMsg(self, srcif, msg): 
-        # generate dump message in correct format
-        # Todo: Make aggregation in forwarding table
         LoM = self.fowardTable.entries
         table = self.dumpTableConfig(LoM) 
         jsonFormat = json.dumps(
@@ -198,39 +411,63 @@ class Router:
                 "msg" : table
             }
         )
-        print(jsonFormat)
-        self.send(srcif, jsonFormat )
+        self.send(srcif, jsonFormat)
 
+    #Processes data messages, and sends to the correct destination supplied, if there is no destination/ shouuld not forward
+    # sends back a no route    
     def dataMsg(self, srcif, msg):
-        msgdest = msg["dst"]
-        ipfrom = ""
-
-        testlist = []
-
-        #looks through the forwawrding table that I created with the prefixes with correct netmask
-        #then looks through and determines which prefix best matches and then sends to it
+        dest = msg['dst']
         
-        #looks through the forwarding table, the destination starts with the prefix of the network, network + netmask
-        #afterwards, then it sends to the correct ip associated with it
+        ip_address = ForwardingTables.getOptimalIP(self.fowardTable, srcif, dest)
+    
+        noroutemsg = {
+                    "src": srcif[:-1] + "1",
+                    "dst": srcif,
+                    "type": "no route",
+                    "msg": {}
+                    }
 
-        #multiple networks can share the ip
+        if ip_address: 
+            relsrc = self.relations[srcif]
+            reldst = self.relations[ip_address]
+            if  relsrc == 'cust' or reldst == "cust" :
+                self.send(ip_address, json.dumps(msg))   
+            else: 
+                self.send(srcif, json.dumps(noroutemsg))   
+        else: 
+            self.send(srcif, json.dumps(noroutemsg))
 
-        for x in self.fowardTable.testrouting:
-            if(msgdest.startswith(x)):
-                testlist.append(self.fowardTable.testrouting[x])
-                ipfrom = self.fowardTable.testrouting[x][0]
+    #Withdraws a route from our forwarding table, and stores that annnouncment in our list of announcement
+    def withDrawMsg(self,srcif, msg): 
+        self.LoA.append(msg)
+        self.fowardTable.remove_entries(srcif, msg, self.LoA)
+        LoNM = []
 
-                
-        print("entries currently that match " + str(testlist))        
-        print("the length of the matching networks with this string is " + str(len(testlist[0])))        
-        
-        self.send(ipfrom, json.dumps(msg))          
+        for i in range(len(msg['msg'])): 
+            ListofMsg = msg['msg']
+            newJson = {
+                'netmask' : ListofMsg[i]['netmask'],
+                'network' : ListofMsg[i]['network']
+            }
+            LoNM.append(newJson)
 
-    # Processing the msg and delegate to delegation method
+        for n in self.LoN: 
+            if n != srcif:
+                msgCopy = {
+                    "msg": LoNM, 
+                    "src": n[:-1] + '1',
+                    "dst": n,
+                    "type": msg['type']
+                }
+                    
+                self.send(n, json.dumps(msgCopy))
+            
+    #processes the message recieved from the sockets, and delegates to the correct function based on the type from the data        
     def process_msgReceived(self, msg, srcif): 
-        data = json.loads(msg); 
+        data = json.loads(msg) 
 
-        if (data["type"] == 'update'): 
+        if (data["type"] == 'update'):
+            print("before we parsed into update message list:" + str(data)) 
             self.updateMSG(srcif, data)
         
         if (data["type"] == 'data'): 
@@ -238,6 +475,10 @@ class Router:
 
         if (data["type"] == 'dump'):
             self.dumpMsg(srcif, data)
+
+        if (data["type"] == "withdraw"): 
+            self.withDrawMsg(srcif, data)
+
 
     def run(self):
         while True:
@@ -251,7 +492,6 @@ class Router:
                         break
                 msg = k.decode('utf-8')
                 self.process_msgReceived(msg, srcif)
-                print("Received message '%s' from %s" % (msg, srcif))
             
         return
 
@@ -261,5 +501,4 @@ if __name__ == "__main__":
     parser.add_argument('connections', metavar='connections', type=str, nargs='+', help="connections")
     args = parser.parse_args()
     router = Router(args.asn, args.connections)
-    # router = Router(7, {"7833-1.2.3.2-cust", "2374-192.168.0.2-peer" ,"1293-67.32.9.2-prov"})
     router.run()
